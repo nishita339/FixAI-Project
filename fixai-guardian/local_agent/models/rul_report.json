@@ -1,0 +1,85 @@
+{
+  "dataset": "NASA C-MAPSS (FD001)",
+  "train_rows": 20631,
+  "test_rows": 13096,
+  "train_units": 100,
+  "test_units": 100,
+  "num_features": 68,
+  "hyperparameters": {
+    "n_estimators": 120,
+    "max_depth": 5,
+    "learning_rate": 0.07,
+    "subsample": 0.85,
+    "colsample_bytree": 0.85,
+    "clip_rul": 125,
+    "window": 5
+  },
+  "metrics": {
+    "last_cycle_benchmark": {
+      "rmse_clipped": 17.559,
+      "mae_clipped": 12.321,
+      "r2_clipped": 0.808,
+      "rmse_unclipped": 18.576,
+      "mae_unclipped": 13.391,
+      "nasa_score": 928.16
+    },
+    "all_cycles": {
+      "rmse": 16.641,
+      "mae": 11.526,
+      "r2": 0.6359
+    }
+  },
+  "top_features": [
+    {
+      "rank": 1,
+      "feature": "s_4_roll_mean",
+      "importance": 0.3443
+    },
+    {
+      "rank": 2,
+      "feature": "s_11_roll_mean",
+      "importance": 0.2087
+    },
+    {
+      "rank": 3,
+      "feature": "s_15_roll_mean",
+      "importance": 0.1299
+    },
+    {
+      "rank": 4,
+      "feature": "s_9_roll_mean",
+      "importance": 0.0421
+    },
+    {
+      "rank": 5,
+      "feature": "s_9",
+      "importance": 0.0292
+    },
+    {
+      "rank": 6,
+      "feature": "s_2_roll_mean",
+      "importance": 0.024
+    },
+    {
+      "rank": 7,
+      "feature": "s_3_roll_mean",
+      "importance": 0.0224
+    },
+    {
+      "rank": 8,
+      "feature": "s_20_roll_mean",
+      "importance": 0.0147
+    },
+    {
+      "rank": 9,
+      "feature": "s_17_roll_mean",
+      "importance": 0.0141
+    },
+    {
+      "rank": 10,
+      "feature": "s_7_roll_mean",
+      "importance": 0.012
+    }
+  ],
+  "training_duration_seconds": 1.73
+}

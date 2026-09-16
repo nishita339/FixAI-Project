@@ -1,0 +1,36 @@
+{
+  "timestamp": 1789320146,
+  "domain": "telemetry",
+  "telemetry": {
+    "samples_evaluated": 1013,
+    "inlier_ratio": 0.9842,
+    "mean_score": 0.1986,
+    "stress_verifications": [
+      {
+        "scenario": "Normal Baseline",
+        "anomaly_score": 0.0,
+        "p_failure": 0.002,
+        "expected_state": "LOW"
+      },
+      {
+        "scenario": "CPU Saturation (95%)",
+        "anomaly_score": 0.645,
+        "p_failure": 0.99,
+        "expected_state": "ELEVATED"
+      },
+      {
+        "scenario": "RAM Exhaustion (96%)",
+        "anomaly_score": 0.433,
+        "p_failure": 0.001,
+        "expected_state": "ELEVATED"
+      },
+      {
+        "scenario": "Full-Stack Disaster",
+        "anomaly_score": 0.645,
+        "p_failure": 0.997,
+        "expected_state": "CRITICAL"
+      }
+    ]
+  },
+  "total_evaluation_time_seconds": 0.52
+}

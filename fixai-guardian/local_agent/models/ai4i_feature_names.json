@@ -1,0 +1,11 @@
+[
+  "Type_encoded",
+  "Air temperature [K]",
+  "Process temperature [K]",
+  "Rotational speed [rpm]",
+  "Torque [Nm]",
+  "Tool wear [min]",
+  "Temp_diff",
+  "Power_kW",
+  "Overstrain"
+]

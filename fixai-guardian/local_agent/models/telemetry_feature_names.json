@@ -1,0 +1,7 @@
+[
+  "cpu",
+  "ram",
+  "latency",
+  "error_rate",
+  "disk"
+]

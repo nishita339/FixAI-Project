@@ -1,0 +1,61 @@
+{
+  "dataset": "C:\\project\\FixAI\\fixai1\\data\\ai4i2020.csv",
+  "total_samples": 10000,
+  "train_samples": 8000,
+  "test_samples": 2000,
+  "features": [
+    "Type_encoded",
+    "Air temperature [K]",
+    "Process temperature [K]",
+    "Rotational speed [rpm]",
+    "Torque [Nm]",
+    "Tool wear [min]",
+    "Temp_diff",
+    "Power_kW",
+    "Overstrain"
+  ],
+  "isolation_forest": {
+    "f1": 0.2733812949640288,
+    "recall": 0.27941176470588236,
+    "precision": 0.2676056338028169,
+    "healthy_train_samples": 7729
+  },
+  "xgboost_binary": {
+    "f1": 0.7733333333333333,
+    "recall": 0.8529411764705882,
+    "precision": 0.7073170731707317,
+    "scale_pos_weight": 28.52029520295203
+  },
+  "multilabel_failure_modes": {
+    "TWF": {
+      "f1": 0.11594202898550725,
+      "recall": 0.4,
+      "precision": 0.06779661016949153,
+      "pos_count": 36
+    },
+    "HDF": {
+      "f1": 0.9491525423728814,
+      "recall": 0.9655172413793104,
+      "precision": 0.9333333333333333,
+      "pos_count": 86
+    },
+    "PWF": {
+      "f1": 0.9285714285714286,
+      "recall": 1.0,
+      "precision": 0.8666666666666667,
+      "pos_count": 82
+    },
+    "OSF": {
+      "f1": 0.9696969696969697,
+      "recall": 1.0,
+      "precision": 0.9411764705882353,
+      "pos_count": 82
+    },
+    "RNF": {
+      "f1": 0.0,
+      "recall": 0.0,
+      "precision": 0.0,
+      "pos_count": 15
+    }
+  }
+}

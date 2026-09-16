@@ -1,0 +1,103 @@
+{
+  "dataset": "C:\\project\\FixAI\\fixai1\\data\\telemetry.jsonl",
+  "total_samples": 1013,
+  "features": [
+    "cpu",
+    "ram",
+    "latency",
+    "error_rate",
+    "disk"
+  ],
+  "device_profile": {
+    "cpu": {
+      "mean": 5.14,
+      "std": 3.18,
+      "min": 0.0,
+      "p50": 4.0,
+      "p95": 11.6,
+      "max": 19.6
+    },
+    "ram": {
+      "mean": 63.74,
+      "std": 4.82,
+      "min": 60.1,
+      "p50": 62.1,
+      "p95": 76.84,
+      "max": 78.3
+    },
+    "latency": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "max": 0.0
+    },
+    "error_rate": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "max": 0.0
+    },
+    "disk": {
+      "mean": 75.1,
+      "std": 0.0,
+      "min": 75.1,
+      "p50": 75.1,
+      "p95": 75.1,
+      "max": 75.1
+    }
+  },
+  "isolation_forest": {
+    "n_estimators": 150,
+    "contamination": 0.015,
+    "inlier_ratio": 0.9842,
+    "mean_score": 0.1986
+  },
+  "xgboost_distilled": {
+    "n_estimators": 60,
+    "max_depth": 3,
+    "scale_pos_weight": 62.31
+  },
+  "stress_sensitivity_verification": [
+    {
+      "scenario": "Normal Baseline",
+      "raw_decision": 0.259,
+      "anomaly_score": 0.0,
+      "p_failure": 0.002
+    },
+    {
+      "scenario": "CPU Peak Workload (95%)",
+      "raw_decision": -0.018,
+      "anomaly_score": 0.536,
+      "p_failure": 0.251
+    },
+    {
+      "scenario": "Memory Saturation (96%)",
+      "raw_decision": -0.002,
+      "anomaly_score": 0.505,
+      "p_failure": 0.001
+    },
+    {
+      "scenario": "Latency Surge (3500ms)",
+      "raw_decision": 0.259,
+      "anomaly_score": 0.0,
+      "p_failure": 0.002
+    },
+    {
+      "scenario": "HTTP 5xx Error Burst (25%)",
+      "raw_decision": 0.259,
+      "anomaly_score": 0.0,
+      "p_failure": 0.002
+    },
+    {
+      "scenario": "Full Stack Exhaustion",
+      "raw_decision": -0.072,
+      "anomaly_score": 0.645,
+      "p_failure": 0.997
+    }
+  ],
+  "adaptation_duration_seconds": 1.11
+}
