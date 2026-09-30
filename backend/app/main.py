@@ -9,11 +9,24 @@ from app.config import settings
 from app.database import Base, engine
 
 
+def _sync_schema(sync_conn):
+    Base.metadata.create_all(sync_conn)
+    # Auto-reconcile missing columns on existing SQLite databases
+    try:
+        from sqlalchemy import text
+        res = sync_conn.execute(text("PRAGMA table_info(playbooks)")).fetchall()
+        cols = [r[1] for r in res]
+        if cols and "verification_window_seconds" not in cols:
+            sync_conn.execute(text("ALTER TABLE playbooks ADD COLUMN verification_window_seconds INTEGER DEFAULT 15"))
+    except Exception:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Auto-create tables on startup (works seamlessly for SQLite / dev)
+    # Auto-create tables & reconcile schema on startup
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_sync_schema)
     yield
     await engine.dispose()
 

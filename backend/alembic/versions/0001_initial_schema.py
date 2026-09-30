@@ -56,6 +56,7 @@ def upgrade() -> None:
         sa.Column("risk_tier", sa.String(length=20), nullable=False),
         sa.Column("allowed_params", sa.JSON(), nullable=False),
         sa.Column("description", sa.String(length=255), nullable=True),
+        sa.Column("verification_window_seconds", sa.Integer(), server_default="15", nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
 
