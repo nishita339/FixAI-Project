@@ -1,5 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
+import { ThemeProvider } from "@/hooks/use-theme";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
 import React, { StrictMode, lazy, Suspense } from "react";
@@ -73,10 +74,11 @@ const convex = new ConvexReactClient(convexUrl);
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <RootErrorBoundary>
-      <ConvexAuthProvider client={convex}>
-        <BrowserRouter>
-          <Suspense fallback={<RouteLoading />}>
-            <Routes>
+      <ThemeProvider defaultTheme="dark">
+        <ConvexAuthProvider client={convex}>
+          <BrowserRouter>
+            <Suspense fallback={<RouteLoading />}>
+              <Routes>
               <Route path="/" element={<Landing />} />
               <Route
                 path="/auth"
@@ -112,7 +114,8 @@ createRoot(document.getElementById("root")!).render(
         </BrowserRouter>
         <Toaster />
       </ConvexAuthProvider>
-    </RootErrorBoundary>
-  </StrictMode>,
+    </ThemeProvider>
+  </RootErrorBoundary>
+</StrictMode>,
 );
 
