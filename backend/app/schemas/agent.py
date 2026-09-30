@@ -82,3 +82,21 @@ class ResolvePayload(BaseModel):
 class ClaimPayload(BaseModel):
     incident_id: str
     agent_name: Optional[str] = "fixai-agent"
+
+
+class BatchIngestPayload(BaseModel):
+    batch: List[IngestPayload]
+    device_id: Optional[str] = None
+
+
+class DeviceStatusResponse(BaseModel):
+    device_id: str
+    name: str
+    is_online: bool
+    mode: str
+    status: str
+    health_score: float
+    last_heartbeat: Optional[str] = None
+    seconds_since_heartbeat: Optional[float] = None
+    websocket_clients: int = 0
+    server_time: str

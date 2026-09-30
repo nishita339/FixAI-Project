@@ -41,6 +41,7 @@ from recovery.executor import RecoveryManager
 from watchdog_monitor import WatchdogMonitor, DiskFillAlert
 from osquery_collector import OsqueryCollector
 from edr import EDREngine, SecurityNarrative
+from offline_buffer import OfflineTelemetryBuffer
 
 # ───────────────────────────────────────────────────────────────────────────
 # Configuration
@@ -52,12 +53,16 @@ CONVEX_TELEMETRY_URL: str = os.getenv(
     "CONVEX_TELEMETRY_URL",
     os.getenv("BACKEND_URL", "http://localhost:8000/api/v1/agent/ingest"),
 )
+BATCH_TELEMETRY_URL: str = CONVEX_TELEMETRY_URL.replace("/ingest", "/ingest-batch")
 CONVEX_DEVICE_API_KEY: str = os.getenv(
     "CONVEX_DEVICE_API_KEY",
     os.getenv("FIXAI_DEVICE_API_KEY", "fixai-device-secret-key-2026"),
 )
 DEVICE_NAME: str = os.getenv("DEVICE_NAME", os.getenv("FIXAI_DEVICE_NAME", "Local-Workstation"))
 DEVICE_ID: str = os.getenv("DEVICE_ID", f"dev-{abs(hash(DEVICE_NAME)) % 100000:05d}")
+
+# Embedded offline store-and-forward buffer
+offline_buffer = OfflineTelemetryBuffer()
 
 # Setup structured logging
 logging.basicConfig(
@@ -226,10 +231,11 @@ def collect_hardware_metrics() -> Dict[str, float]:
 
 def send_telemetry_payload(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
-    POST the telemetry and AI diagnosis payload to Convex.
+    POST the telemetry and AI diagnosis payload to Convex/FastAPI.
 
-    Catches all connection and HTTP errors so the agent does not crash
-    if network connectivity drops.
+    When online, syncs immediately and drains any backlogged offline telemetry.
+    When offline or disconnected, caches payload in local SQLite store-and-forward
+    queue so no telemetry or security incidents are ever lost.
     """
     headers = {
         "Content-Type": "application/json",
@@ -242,30 +248,38 @@ def send_telemetry_payload(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             CONVEX_TELEMETRY_URL,
             json=payload,
             headers=headers,
-            timeout=5.0,
+            timeout=4.0,
         )
         if response.status_code in (200, 201, 204):
-            logger.info("☁️  Telemetry synced successfully (HTTP %s)", response.status_code)
+            logger.info("☁️  Telemetry synced successfully (HTTP %s) [ONLINE]", response.status_code)
+
+            # Reconnection backfill: If there are cached offline samples, flush them in batch
+            pending_count = offline_buffer.count()
+            if pending_count > 0:
+                logger.info("🔄 Backfill trigger: Draining %d offline buffered records to backend...", pending_count)
+                flushed = offline_buffer.flush_to_backend(BATCH_TELEMETRY_URL, headers)
+                if flushed > 0:
+                    logger.info("✨ Successfully flushed %d offline records to backend!", flushed)
+
             try:
                 return response.json()
             except Exception:
                 return {"status": "ok"}
         else:
             logger.warning(
-                "⚠️  Convex endpoint returned non-200 status [%d]: %s",
+                "⚠️  Backend endpoint returned non-200 status [%d] — caching payload in local offline buffer",
                 response.status_code,
-                response.text[:120],
             )
+            offline_buffer.enqueue(payload)
             return None
 
-    except requests.exceptions.Timeout:
-        logger.warning("⏱️  Convex request timed out. Will retry next cycle.")
-        return None
-    except requests.exceptions.ConnectionError:
-        logger.warning("🔌  Network connection error. Server unreachable at %s", CONVEX_TELEMETRY_URL)
-        return None
-    except requests.exceptions.RequestException as exc:
-        logger.error("❌  HTTP request failed: %s", exc)
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.RequestException) as exc:
+        offline_buffer.enqueue(payload)
+        logger.warning(
+            "🔌 Backend unreachable (%s). OFFLINE MODE: payload safely buffered in SQLite (queue depth: %d)",
+            type(exc).__name__,
+            offline_buffer.count(),
+        )
         return None
 
 

@@ -22,6 +22,8 @@ build/
 out/
 .next/
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 

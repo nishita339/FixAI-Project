@@ -53,6 +53,8 @@ export interface FixAiAgent {
   isLiveHardware: boolean;
   setIsLiveHardware: (v: boolean) => void;
   hardwareOnline: boolean;
+  isWsConnected?: boolean;
+  streamMode?: "WEBSOCKET_LIVE" | "HTTP_POLLING" | "OFFLINE_AUTONOMOUS";
   /** Post-fix validation result for the last episode. */
   validationResult: {
     restored: boolean;
@@ -91,11 +93,17 @@ export function useFixAiAgent(): FixAiAgent {
   const [deviceId, setDeviceId] = useState<Id<"devices"> | null>(null);
   const [isLiveHardware, setIsLiveHardware] = useState<boolean>(true);
   const [hardwareOnline, setHardwareOnline] = useState<boolean>(false);
+  const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
 
   const isLiveHardwareRef = useRef(isLiveHardware);
   useEffect(() => {
     isLiveHardwareRef.current = isLiveHardware;
   }, [isLiveHardware]);
+
+  const isWsConnectedRef = useRef(isWsConnected);
+  useEffect(() => {
+    isWsConnectedRef.current = isWsConnected;
+  }, [isWsConnected]);
 
   const simRef = useRef<SimState>({ samples: [], fault: "none", faultProgress: 0 });
   const faultRef = useRef<FaultKey>("none");
@@ -110,6 +118,86 @@ export function useFixAiAgent(): FixAiAgent {
   }, []);
 
   const permissions = useMemo(() => DEFAULT_PERMISSIONS, []);
+
+  // ── Real-Time WebSocket Streaming Connection ──────────────────────────
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: number | undefined;
+    let isCancelled = false;
+
+    const connectWs = () => {
+      if (isCancelled) return;
+      try {
+        const wsUrl = FASTAPI_URL.replace(/^http/, "ws") + "/api/v1/ws/telemetry";
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          if (isCancelled) {
+            ws?.close();
+            return;
+          }
+          setIsWsConnected(true);
+          setHardwareOnline(true);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            const sampleData = msg.data || msg.telemetry;
+            if (sampleData && isLiveHardwareRef.current && faultRef.current === "none") {
+              setHardwareOnline(true);
+              const liveSample: TelemetrySample = {
+                t: sampleData.t || Date.now(),
+                cpu: sampleData.cpu ?? 10.0,
+                ram: sampleData.ram ?? 20.0,
+                latency: sampleData.latency ?? 12.0,
+                errorRate: sampleData.errorRate ?? 0.0,
+                disk: sampleData.disk ?? 45.0,
+                temp: sampleData.temp ?? 45.0,
+                battery: sampleData.battery ?? 100.0,
+              };
+
+              simRef.current = {
+                ...simRef.current,
+                samples: [...simRef.current.samples, liveSample].slice(-90),
+              };
+              setSamples(simRef.current.samples);
+            }
+          } catch {
+            // Ignore frame parse errors
+          }
+        };
+
+        ws.onclose = () => {
+          setIsWsConnected(false);
+          if (!isCancelled) {
+            reconnectTimeout = window.setTimeout(connectWs, 3000);
+          }
+        };
+
+        ws.onerror = () => {
+          setIsWsConnected(false);
+        };
+      } catch {
+        setIsWsConnected(false);
+        if (!isCancelled) {
+          reconnectTimeout = window.setTimeout(connectWs, 3000);
+        }
+      }
+    };
+
+    connectWs();
+
+    return () => {
+      isCancelled = true;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) {
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+      }
+    };
+  }, []);
 
   // Register the device when authed.
   useEffect(() => {
@@ -139,14 +227,15 @@ export function useFixAiAgent(): FixAiAgent {
     };
   }, [isAuthenticated, device, ensureDevice]);
 
-  // The monitoring loop — one telemetry tick every 2s.
+  // The monitoring loop — fallback HTTP polling & local autonomous synthesis
   useEffect(() => {
     if (!isMonitoring) return;
     const id = window.setInterval(async () => {
       let liveSample: TelemetrySample | null = null;
 
       // When live hardware mode is enabled and user hasn't selected a synthetic fault injection:
-      if (isLiveHardwareRef.current && faultRef.current === "none") {
+      // If WebSocket is actively pushing frames, skip redundant HTTP polling.
+      if (isLiveHardwareRef.current && faultRef.current === "none" && !isWsConnectedRef.current) {
         try {
           const resp = await axios.get(`${FASTAPI_URL}/api/v1/agent/live-telemetry`, { timeout: 1400 });
           if (resp.status === 200 && resp.data && resp.data.isRealHardware) {
@@ -172,7 +261,7 @@ export function useFixAiAgent(): FixAiAgent {
           ...simRef.current,
           samples: [...simRef.current.samples, liveSample].slice(-90),
         };
-      } else {
+      } else if (!isWsConnectedRef.current) {
         simRef.current = nextSample({ ...simRef.current, fault: faultRef.current });
       }
 
@@ -647,6 +736,12 @@ export function useFixAiAgent(): FixAiAgent {
     isLiveHardware,
     setIsLiveHardware,
     hardwareOnline,
+    isWsConnected,
+    streamMode: isWsConnected
+      ? "WEBSOCKET_LIVE"
+      : hardwareOnline
+      ? "HTTP_POLLING"
+      : "OFFLINE_AUTONOMOUS",
     validationResult: validation,
     injectFault,
     clearFault,

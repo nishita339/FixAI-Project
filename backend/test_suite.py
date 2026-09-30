@@ -140,6 +140,41 @@ async def run_tests():
             print(f"[{total}] PASS: GET /api/v1/agent/software-updates -> 200 OK ({data.get('totalUpgrades', 0)} updates cataloged)")
             passed += 1
 
+            # Test 11: Real-Time Device Online/Offline Status
+            total += 1
+            resp = await client.get("/api/v1/agent/device-status?device_id=dev-laptop-001")
+            assert resp.status_code == 200, f"Device status check failed: {resp.status_code}"
+            dev_status = resp.json()
+            assert "is_online" in dev_status and "mode" in dev_status
+            print(f"[{total}] PASS: GET /api/v1/agent/device-status -> 200 OK (Mode: {dev_status['mode']}, IsOnline: {dev_status['is_online']})")
+            passed += 1
+
+            # Test 12: Offline Batch Telemetry Ingestion (Store-and-Forward Replay)
+            total += 1
+            batch_payload = {
+                "device_id": "dev-laptop-001",
+                "batch": [
+                    {
+                        "device_id": "dev-laptop-001",
+                        "timestamp": 1720000005000,
+                        "metrics": {"cpu": 32.0, "ram": 58.0, "disk": 41.0, "latency": 14.0, "error_rate": 0.0},
+                        "ai_results": {"anomaly_score": 0.15, "p_failure": 0.08, "risk": "LOW"},
+                    },
+                    {
+                        "device_id": "dev-laptop-001",
+                        "timestamp": 1720000010000,
+                        "metrics": {"cpu": 35.0, "ram": 59.0, "disk": 41.0, "latency": 13.0, "error_rate": 0.0},
+                        "ai_results": {"anomaly_score": 0.18, "p_failure": 0.10, "risk": "LOW"},
+                    },
+                ]
+            }
+            resp = await client.post("/api/v1/agent/ingest-batch", json=batch_payload, headers=headers)
+            assert resp.status_code == 200, f"Batch ingest failed: {resp.status_code} - {resp.text}"
+            batch_data = resp.json()
+            assert batch_data.get("syncedCount") == 2
+            print(f"[{total}] PASS: POST /api/v1/agent/ingest-batch -> 200 OK (synced {batch_data['syncedCount']} offline samples)")
+            passed += 1
+
             # Allow async subprocess transports to close cleanly
             await asyncio.sleep(0.2)
 

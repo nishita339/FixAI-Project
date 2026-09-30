@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 import jwt
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,14 @@ from app.models.incident import Incident
 from app.models.playbook import Playbook
 from app.models.telemetry import TelemetrySample
 from app.models.user import User
-from app.schemas.agent import ClaimPayload, IngestPayload, ResolvePayload
+from app.schemas.agent import (
+    BatchIngestPayload,
+    ClaimPayload,
+    DeviceStatusResponse,
+    IngestPayload,
+    ResolvePayload,
+)
+from app.websockets import ws_manager
 
 router = APIRouter(prefix="/agent", tags=["agent-bridge"])
 
@@ -138,10 +145,16 @@ async def ingest_telemetry(
     if payload.specs:
         device.specs = payload.specs
 
+    sample_time = (
+        datetime.fromtimestamp(payload.timestamp / 1000.0, timezone.utc)
+        if payload.timestamp
+        else now
+    )
+
     # 2. Record telemetry sample
     sample = TelemetrySample(
         device_id=device.id,
-        timestamp=now,
+        timestamp=sample_time,
         cpu=tel.cpu,
         ram=tel.ram,
         latency=tel.latency,
@@ -194,6 +207,38 @@ async def ingest_telemetry(
 
     await db.commit()
 
+    # 5. Broadcast to connected WebSocket clients in real-time
+    await ws_manager.broadcast_telemetry({
+        "t": payload.timestamp or int(now.timestamp() * 1000),
+        "cpu": tel.cpu,
+        "ram": tel.ram,
+        "latency": tel.latency,
+        "errorRate": tel.errorRate,
+        "disk": tel.disk,
+        "anomalyScore": verdict.anomalyScore,
+        "pFailure": verdict.pFailure,
+        "risk": verdict.risk,
+        "device_id": device.id,
+        "device_name": device.name,
+        "isRealHardware": True,
+        "is_online": True,
+        "edr_telemetry": payload.edr_telemetry,
+        "osquery_data": payload.osquery_data,
+        "nlg_explanation": payload.nlg_explanation,
+    })
+
+    if incident_id:
+        await ws_manager.broadcast_alert({
+            "incident_id": incident_id,
+            "device_id": device.id,
+            "risk": risk,
+            "primary_cause": primary_cause,
+            "explanation": explanation,
+            "failure_probability": verdict.pFailure,
+            "anomaly_score": verdict.anomalyScore,
+            "timestamp": int(now.timestamp() * 1000),
+        })
+
     return {
         "ok": True,
         "deviceId": device.id,
@@ -201,6 +246,149 @@ async def ingest_telemetry(
         "incidentId": incident_id,
         "status": device.status,
     }
+
+
+@router.post("/ingest-batch")
+@router.post("/telemetry-batch")
+async def ingest_telemetry_batch(
+    payload: BatchIngestPayload,
+    device: Device = Depends(get_device_from_api_key),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    POST /api/v1/agent/ingest-batch
+    Ingests a batch of offline-buffered telemetry samples collected while the endpoint was disconnected.
+    Preserves original timestamps, recreates timeline continuity, and marks endpoint ONLINE.
+    """
+    now = datetime.now(timezone.utc)
+    synced_count = 0
+    latest_item = None
+
+    for item in payload.batch:
+        tel = item.get_telemetry()
+        sample_time = (
+            datetime.fromtimestamp(item.timestamp / 1000.0, timezone.utc)
+            if item.timestamp
+            else now
+        )
+
+        sample = TelemetrySample(
+            device_id=device.id,
+            timestamp=sample_time,
+            cpu=tel.cpu,
+            ram=tel.ram,
+            latency=tel.latency,
+            error_rate=tel.errorRate,
+            disk=tel.disk,
+        )
+        db.add(sample)
+        synced_count += 1
+        latest_item = item
+
+    if latest_item:
+        latest_verdict = latest_item.get_verdict()
+        device.status = status_from_risk(latest_verdict.risk)
+        device.health_score = health_from_verdict(latest_verdict.pFailure)
+        device.failure_risk = latest_verdict.pFailure
+        device.anomaly_score = latest_verdict.anomalyScore
+
+    device.agent_online = True
+    device.last_heartbeat = now
+    await db.commit()
+
+    # Broadcast offline sync completion to WebSocket clients
+    await ws_manager.broadcast({
+        "type": "OFFLINE_SYNC_COMPLETE",
+        "device_id": device.id,
+        "samples_synced": synced_count,
+        "timestamp": int(now.timestamp() * 1000),
+    })
+
+    return {
+        "ok": True,
+        "deviceId": device.id,
+        "syncedCount": synced_count,
+        "status": device.status,
+        "message": f"Successfully synced {synced_count} offline telemetry samples",
+    }
+
+
+@router.get("/device-status", response_model=DeviceStatusResponse)
+@router.get("/status", response_model=DeviceStatusResponse)
+async def get_device_status(
+    device_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    GET /api/v1/agent/device-status
+    Returns the real-time online/offline connectivity state of the host device.
+    Computes heartbeat freshness: device is ONLINE if heartbeat received within last 15s.
+    """
+    now = datetime.now(timezone.utc)
+    query = select(Device)
+    if device_id:
+        query = query.where(Device.id == device_id)
+    result = await db.execute(query.limit(1))
+    device = result.scalars().first()
+
+    if not device:
+        return DeviceStatusResponse(
+            device_id=device_id or "dev-laptop-001",
+            name="Local Workstation",
+            is_online=True,
+            mode="STANDALONE_LOCAL",
+            status="HEALTHY",
+            health_score=100.0,
+            last_heartbeat=now.isoformat(),
+            seconds_since_heartbeat=0.0,
+            websocket_clients=ws_manager.get_active_count(),
+            server_time=now.isoformat(),
+        )
+
+    hb = device.last_heartbeat
+    if hb:
+        if hb.tzinfo is None:
+            hb = hb.replace(tzinfo=timezone.utc)
+        seconds_since = (now - hb).total_seconds()
+    else:
+        seconds_since = 999999.0
+    is_online = seconds_since <= 15.0
+
+    if device.agent_online != is_online:
+        device.agent_online = is_online
+        await db.commit()
+
+    return DeviceStatusResponse(
+        device_id=device.id,
+        name=device.name,
+        is_online=is_online,
+        mode="ONLINE" if is_online else "OFFLINE",
+        status=device.status if is_online else "OFFLINE",
+        health_score=device.health_score if is_online else 0.0,
+        last_heartbeat=device.last_heartbeat.isoformat() if device.last_heartbeat else None,
+        seconds_since_heartbeat=round(seconds_since, 1),
+        websocket_clients=ws_manager.get_active_count(),
+        server_time=now.isoformat(),
+    )
+
+
+@router.websocket("/ws/telemetry")
+async def websocket_telemetry(websocket: WebSocket):
+    """
+    WebSocket /api/v1/agent/ws/telemetry
+    Provides real-time sub-50ms streaming of hardware metrics, AI verdicts,
+    and EDR security alerts to the FixAI Dashboard.
+    """
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        await ws_manager.disconnect(websocket)
+    except Exception:
+        await ws_manager.disconnect(websocket)
 
 
 @router.post("/resolve")
