@@ -68,7 +68,7 @@ ALLOWLISTED_PLAYBOOKS = {
     "repair_boot_configuration": ("LOW", 15),
     "resolve_driver_conflicts": ("LOW", 10),
     "fix_app_freeze": ("LOW", 5),
-    "restart_graphics_subsystem": ("MEDIUM", 15),
+    "upgrade_software_package": ("LOW", 30),
     # ── EDR & Cybersecurity Self-Healing Playbooks ──
     "quarantine_threat_payload": ("HIGH", 10),
     "isolate_c2_network": ("MEDIUM", 8),
@@ -307,6 +307,7 @@ class ExecuteLivePayload(BaseModel):
     playbook_id: str
     title: Optional[str] = None
     category: Optional[str] = "Hardware/OS"
+    device_id: Optional[str] = None
     params: Optional[dict] = None
 
 
@@ -600,14 +601,37 @@ async def execute_live_playbook(
 
     logs.append("[✓] Post-fix soak test passed: health restored to 100%.")
 
+    # ── Ensure Playbook entry exists in database (foreign key safety) ──
+    playbook_res = await db.execute(select(Playbook).where(Playbook.id == pb))
+    playbook = playbook_res.scalars().first()
+    if not playbook:
+        risk_info = ALLOWLISTED_PLAYBOOKS.get(pb, ("LOW", 15))
+        playbook = Playbook(
+            id=pb,
+            name=payload.title or pb.replace("_", " ").title(),
+            risk_tier=risk_info[0],
+            verification_window_seconds=risk_info[1],
+            allowed_params={},
+            description=f"Automated recovery playbook: {pb}",
+            created_at=now,
+        )
+        db.add(playbook)
+        await db.flush()
+
+    # ── Resolve Device ID Dynamically ─────────────────────────────────
+    dev_id = payload.device_id
+    if not dev_id:
+        dev_res = await db.execute(select(Device.id).limit(1))
+        dev_id = dev_res.scalar() or "dev-laptop-001"
+
     # ── Record in SQLite Incident table as RESOLVED ───────────────────
     incident_title = payload.title or pb.replace("_", " ").title()
     incident_id = f"inc-{int(now.timestamp() * 1000)}"
     incident = Incident(
         id=incident_id,
-        device_id="primary-laptop",
+        device_id=dev_id,
         status="RESOLVED",
-        risk="LOW",
+        risk=playbook.risk_tier if playbook else "LOW",
         primary_cause=incident_title,
         explanation=f"Autonomous resolution verified for {incident_title}",
         failure_probability=0.08,
@@ -621,7 +645,7 @@ async def execute_live_playbook(
 
     # ── Record in SQLite AuditLog table ───────────────────────────────
     audit = AuditLog(
-        device_id="primary-laptop",
+        device_id=dev_id,
         action=f"LIVE_EXECUTE_{pb.upper()}",
         policy_decision="ALLOWED",
         reason=f"Executed real-world host repair for {incident_title}. Soak verified.",

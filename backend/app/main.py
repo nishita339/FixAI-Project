@@ -8,18 +8,13 @@ from app.api.v1.playbooks import router as playbooks_router
 from app.config import settings
 from app.database import Base, engine
 
+from app.seed import sync_and_seed_database
+
 
 def _sync_schema(sync_conn):
     Base.metadata.create_all(sync_conn)
-    # Auto-reconcile missing columns on existing SQLite databases
-    try:
-        from sqlalchemy import text
-        res = sync_conn.execute(text("PRAGMA table_info(playbooks)")).fetchall()
-        cols = [r[1] for r in res]
-        if cols and "verification_window_seconds" not in cols:
-            sync_conn.execute(text("ALTER TABLE playbooks ADD COLUMN verification_window_seconds INTEGER DEFAULT 15"))
-    except Exception:
-        pass
+    # Auto-reconcile schema and seed initial users, devices, and unified playbooks
+    sync_and_seed_database(sync_conn)
 
 
 @asynccontextmanager

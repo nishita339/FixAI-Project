@@ -807,6 +807,7 @@ class UpdateSoftwarePayload(BaseModel):
     package_id: Optional[str] = None
     app_name: Optional[str] = None
     update_all: Optional[bool] = False
+    device_id: Optional[str] = None
 
 
 @router.post("/update-software")
@@ -854,11 +855,33 @@ async def update_software_package(
 
     logs.append(f"[✓] {app_target} successfully upgraded. Binary checksum validated.")
 
+    # ── Ensure Playbook entry exists in database (foreign key safety) ──
+    pb_res = await db.execute(select(Playbook).where(Playbook.id == "upgrade_software_package"))
+    if not pb_res.scalars().first():
+        db.add(
+            Playbook(
+                id="upgrade_software_package",
+                name="Upgrade Outdated Software Package",
+                risk_tier="LOW",
+                verification_window_seconds=30,
+                allowed_params={},
+                description="Download and install signed vendor software update via Windows Package Manager.",
+                created_at=now,
+            )
+        )
+        await db.flush()
+
+    # ── Resolve Device ID Dynamically ─────────────────────────────────
+    dev_id = payload.device_id
+    if not dev_id:
+        dev_res = await db.execute(select(Device.id).limit(1))
+        dev_id = dev_res.scalar() or "dev-laptop-001"
+
     # Record permanently in SQLite Incident table
     incident_id = f"inc-patch-{int(now.timestamp() * 1000)}"
     incident = Incident(
         id=incident_id,
-        device_id="primary-laptop",
+        device_id=dev_id,
         status="RESOLVED",
         risk="LOW",
         primary_cause=f"Software Update: {app_target}",
@@ -874,7 +897,7 @@ async def update_software_package(
 
     # Record in AuditLog table
     audit = AuditLog(
-        device_id="primary-laptop",
+        device_id=dev_id,
         action=f"SOFTWARE_UPDATE_{app_target.upper().replace(' ', '_')[:20]}",
         policy_decision="ALLOWED",
         reason=f"Applied version upgrade and vulnerability patch for {app_target}.",

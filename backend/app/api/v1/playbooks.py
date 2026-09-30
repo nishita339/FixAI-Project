@@ -16,6 +16,7 @@ class PlaybookResponse(BaseModel):
     risk_tier: str
     allowed_params: dict
     description: Optional[str] = None
+    verification_window_seconds: Optional[int] = 15
 
     class Config:
         from_attributes = True
