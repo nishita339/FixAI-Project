@@ -16,3 +16,16 @@ numpy>=1.24.0
 
 # Recovery executor (Step 4)
 # (uses only stdlib: subprocess, json, os)
+
+# ── Production-Grade Upgrades ──
+# Watchdog: File system monitoring for disk fill detection
+watchdog>=4.0.0
+
+# Desktop notifications (cross-platform)
+plyer>=2.1.0
+
+# EDR & Cybersecurity (AES-256 Quarantine Vault)
+cryptography>=42.0.0
+
+# Optional: osquery (installed system-level, not pip)
+# Install from https://osquery.io/downloads/official/

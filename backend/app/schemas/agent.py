@@ -41,6 +41,8 @@ class IngestPayload(BaseModel):
     shap: Optional[Any] = None
     shap_weights: Optional[Dict[str, float]] = None
     nlg_explanation: Optional[str] = None
+    osquery_data: Optional[Dict[str, Any]] = None
+    edr_telemetry: Optional[Dict[str, Any]] = None
     incident: Optional[Dict[str, Any]] = None
     audit: Optional[Dict[str, Any]] = None
 

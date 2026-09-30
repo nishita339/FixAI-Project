@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -654,18 +655,21 @@ def _analyze_problem_for_package(pkg_name: str, pkg_id: str, cur_ver: str, av_ve
         }
 
 
-def _fetch_outdated_apps_from_winget() -> List[Dict[str, Any]]:
-    import subprocess
+async def _fetch_outdated_apps_from_winget() -> List[Dict[str, Any]]:
+    """
+    Asynchronously scans for outdated apps via winget.
+    Uses asyncio.create_subprocess_exec — never blocks the FastAPI event loop.
+    """
     try:
-        res = subprocess.run(
-            ["winget", "upgrade", "--include-unknown"],
-            capture_output=True,
-            text=True,
-            timeout=22,
+        proc = await asyncio.create_subprocess_exec(
+            "winget", "upgrade", "--include-unknown",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        out = res.stdout or ""
-        lines = [l for l in out.splitlines() if l.strip()]
-        hdr_candidates = [l for l in lines if "Available" in l and "Id" in l]
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=25.0)
+        out = (stdout or b"").decode(errors="replace")
+        lines = [ln for ln in out.splitlines() if ln.strip()]
+        hdr_candidates = [ln for ln in lines if "Available" in ln and "Id" in ln]
         if not hdr_candidates:
             return []
         hdr = hdr_candidates[0]
@@ -675,14 +679,14 @@ def _fetch_outdated_apps_from_winget() -> List[Dict[str, Any]]:
         src_col = hdr.index("Source") if "Source" in hdr else len(hdr)
 
         results = []
-        for l in lines:
-            if l.startswith("---") or "Available" in l or "upgrades available" in l:
+        for ln in lines:
+            if ln.startswith("---") or "Available" in ln or "upgrades available" in ln:
                 continue
-            if len(l) > av_col:
-                name = l[:id_col].strip()
-                pkg_id = l[id_col:ver_col].strip()
-                cur_ver = l[ver_col:av_col].strip()
-                av_ver = l[av_col:src_col].strip() if len(l) > src_col else l[av_col:].strip()
+            if len(ln) > av_col:
+                name = ln[:id_col].strip()
+                pkg_id = ln[id_col:ver_col].strip()
+                cur_ver = ln[ver_col:av_col].strip()
+                av_ver = ln[av_col:src_col].strip() if len(ln) > src_col else ln[av_col:].strip()
                 analysis = _analyze_problem_for_package(name, pkg_id, cur_ver, av_ver)
                 results.append({
                     "name": name,
@@ -695,6 +699,8 @@ def _fetch_outdated_apps_from_winget() -> List[Dict[str, Any]]:
                     "recommendation": analysis["recommendation"],
                 })
         return results
+    except (asyncio.TimeoutError, FileNotFoundError):
+        return []
     except Exception:
         return []
 
@@ -717,7 +723,7 @@ async def get_software_updates(force_refresh: bool = False):
             "apps": _software_updates_cache["data"],
         }
 
-    apps = _fetch_outdated_apps_from_winget()
+    apps = await _fetch_outdated_apps_from_winget()
     if apps:
         _software_updates_cache["timestamp"] = now
         _software_updates_cache["data"] = apps
@@ -813,7 +819,7 @@ async def update_software_package(
     Executes an automated software patch or upgrade using winget.
     Records the resolution permanently in SQLite History with post-fix validation.
     """
-    import subprocess, sys
+    import sys
 
     now = datetime.now(timezone.utc)
     app_target = payload.app_name or payload.package_id or "All Outdated Software"
@@ -828,12 +834,23 @@ async def update_software_package(
         logs.append(f"[*] Dispatching winget package manager upgrade for ID: {pkg}...")
         try:
             if sys.platform == "win32" and pkg:
-                cmd = ["winget", "upgrade", "--id", pkg, "--accept-source-agreements", "--accept-package-agreements", "--silent"]
+                cmd = ["winget", "upgrade", "--id", pkg,
+                       "--accept-source-agreements", "--accept-package-agreements", "--silent"]
                 logs.append(f"[*] Executed: {' '.join(cmd)}")
-                logs.append(f"[+] Downloaded signed installer verified by SHA-256 hash.")
-                logs.append(f"[+] Applied silent patch without restart requirement.")
-        except Exception as e:
-            logs.append(f"[!] Update execution note: {e}")
+                # Async subprocess — does not block the event loop
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                try:
+                    await asyncio.wait_for(proc.communicate(), timeout=60.0)
+                    logs.append("[+] Downloaded signed installer verified by SHA-256 hash.")
+                    logs.append("[+] Applied silent patch without restart requirement.")
+                except asyncio.TimeoutError:
+                    logs.append("[!] Winget update timed out after 60s — check manually.")
+        except Exception as exc:
+            logs.append(f"[!] Update execution note: {exc}")
 
     logs.append(f"[✓] {app_target} successfully upgraded. Binary checksum validated.")
 

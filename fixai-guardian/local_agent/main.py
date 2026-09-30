@@ -38,6 +38,9 @@ sys.path.append(str(Path(__file__).resolve().parent))
 
 from ai_engine.inference import EdgeAIEngine
 from recovery.executor import RecoveryManager
+from watchdog_monitor import WatchdogMonitor, DiskFillAlert
+from osquery_collector import OsqueryCollector
+from edr import EDREngine, SecurityNarrative
 
 # ───────────────────────────────────────────────────────────────────────────
 # Configuration
@@ -273,7 +276,7 @@ def send_telemetry_payload(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 def run_agent() -> None:
     """Main execution loop for the FixAI local agent."""
     logger.info("================================================================")
-    logger.info("  FixAI Local Agent Starting")
+    logger.info("  FixAI Local Agent Starting (Production-Grade)")
     logger.info("  Device Name   : %s (ID: %s)", DEVICE_NAME, DEVICE_ID)
     logger.info("  Convex URL    : %s", CONVEX_TELEMETRY_URL)
     logger.info("  Poll Interval : %d seconds", POLL_INTERVAL)
@@ -287,24 +290,68 @@ def run_agent() -> None:
         logger.critical("Failed to initialize agent components: %s", e)
         sys.exit(1)
 
+    # ── EDR Security Alert Callback -> Desktop Notification ─────────────
+    def _on_edr_alert(narrative: SecurityNarrative) -> None:
+        logger.warning("🚨 EDR ALERT: %s", narrative.title)
+        send_desktop_notification(
+            narrative.title,
+            narrative.to_toast_summary(),
+        )
+
+    edr = EDREngine(on_security_alert=_on_edr_alert)
+
+    # ── Upgrade #2: Watchdog File System Monitor ────────────────────────
+    def _on_disk_fill_alert(alert: DiskFillAlert) -> None:
+        """Callback fired by WatchdogMonitor when a disk fill is detected."""
+        logger.warning(
+            "🚨 WATCHDOG ALERT: %s at %s (%.1fMB > %.1fMB limit). Truncated: %s",
+            alert.alert_type, alert.path, alert.size_mb, alert.limit_mb, alert.truncated,
+        )
+        send_desktop_notification(
+            "FixAI Disk Fill Alert",
+            f"{alert.alert_type} overflow detected at {alert.path} "
+            f"({alert.size_mb}MB). Auto-truncated: {alert.truncated}",
+        )
+
+    # Hook WatchdogMonitor to forward newly discovered files to EDR scanner
+    watchdog = WatchdogMonitor(on_alert=_on_disk_fill_alert, on_file_discovered=edr.inspect_file)
+    watchdog.start()
+
+    # ── Upgrade #1: Osquery Deep Telemetry ──────────────────────────────
+    osquery = OsqueryCollector()
+    osquery_available = osquery.is_available()
+    if osquery_available:
+        logger.info("✅ Osquery integration active — deep OS telemetry enabled")
+    else:
+        logger.info("ℹ️  Osquery not installed — using psutil-only telemetry (install from https://osquery.io)")
+
     cycle_count = 0
     last_alert_risk = "LOW"
     last_alert_time = 0.0
     specs = get_system_specs()
+    last_osquery_data: Dict[str, Any] = {}
+    last_edr_telemetry: Dict[str, Any] = {}
+    OSQUERY_EVERY_N_CYCLES = 6  # collect osquery data every ~30 seconds (6 * 5s)
 
     while _running:
         cycle_start = time.time()
         cycle_count += 1
 
         try:
-            # 1. Collect real host metrics
+            # 1. Collect real host metrics (psutil)
             metrics = collect_hardware_metrics()
 
             # 2. Run real-time edge AI inference
             ai_results = engine.analyze(metrics)
 
+            # 2b. Run EDR detection tick (Event logs, WMI persistence, LotL hierarchies)
+            try:
+                last_edr_telemetry = edr.run_detection_tick()
+            except Exception as e:
+                logger.debug("EDR tick error: %s", e)
+
             logger.info(
-                "Cycle #%d: CPU=%.1f%%, RAM=%.1f%%, Disk=%.1f%% | Anomaly=%.2f, P_fail=%.2f, Risk=%s",
+                "Cycle #%d: CPU=%.1f%%, RAM=%.1f%%, Disk=%.1f%% | Anomaly=%.2f, P_fail=%.2f, Risk=%s, EDR=%s",
                 cycle_count,
                 metrics["cpu"],
                 metrics["ram"],
@@ -312,8 +359,23 @@ def run_agent() -> None:
                 ai_results["anomaly_score"],
                 ai_results["p_failure"],
                 ai_results["risk"],
+                last_edr_telemetry.get("status", "SECURE"),
             )
             logger.info("NLG Diagnosis: %s", ai_results["nlg_explanation"])
+
+            # 2c. Collect deep OS telemetry via osquery (every N cycles)
+            if osquery_available and (cycle_count % OSQUERY_EVERY_N_CYCLES == 0):
+                try:
+                    last_osquery_data = osquery.collect()
+                    sec_signals = last_osquery_data.get("security_signals", {})
+                    stopped_count = sec_signals.get("stopped_auto_services_count", 0)
+                    if stopped_count > 3:
+                        logger.warning(
+                            "⚠️  Osquery: %d auto-start services are stopped — possible sabotage or crash",
+                            stopped_count,
+                        )
+                except Exception as exc:
+                    logger.debug("Osquery collection error (will retry): %s", exc)
 
             # 3. Check for risk threshold transition to notify desktop
             current_risk = str(ai_results.get("risk", "LOW")).upper()
@@ -358,6 +420,10 @@ def run_agent() -> None:
                 "shap": ai_results.get("shap_weights", {}),
                 "shap_weights": ai_results.get("shap_weights", {}),
                 "nlg_explanation": ai_results.get("nlg_explanation", ""),
+                # ── Production telemetry enrichments ──
+                "osquery_data": last_osquery_data if last_osquery_data else None,
+                "edr_telemetry": last_edr_telemetry if last_edr_telemetry else None,
+                "watchdog_status": watchdog.get_status(),
             }
 
             # 5. Stream to Convex / Backend
@@ -396,9 +462,11 @@ def run_agent() -> None:
         sleep_duration = max(0.1, POLL_INTERVAL - elapsed)
         time.sleep(sleep_duration)
 
-
+    # ── Cleanup ─────────────────────────────────────────────────────────
+    watchdog.stop()
     logger.info("FixAI Agent stopped successfully.")
 
 
 if __name__ == "__main__":
     run_agent()
+
