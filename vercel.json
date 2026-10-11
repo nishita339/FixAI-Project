@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "cd fixai-guardian && npm install",
+  "buildCommand": "cd fixai-guardian && npm run build",
+  "outputDirectory": "fixai-guardian/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

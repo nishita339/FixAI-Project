@@ -1,0 +1,34 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fixai-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - FIXAI_ENV=production
+      - JWT_SECRET=fixai-production-secret-key-change-me-2026
+      - CONVEX_DEVICE_API_KEY=fixai-device-secret-key-2026
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:80
+      - DATABASE_URL=sqlite+aiosqlite:///./data/fixai.db
+    volumes:
+      - backend-data:/app/data
+
+  frontend:
+    build:
+      context: ./fixai-guardian
+      dockerfile: Dockerfile
+      args:
+        - VITE_FASTAPI_URL=http://localhost:8000
+    container_name: fixai-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  backend-data:

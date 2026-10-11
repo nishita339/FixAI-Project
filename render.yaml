@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: fixai-backend
+    env: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: FIXAI_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CONVEX_DEVICE_API_KEY
+        generateValue: true
+      - key: DEFAULT_DEVICE_KEY
+        value: fixai-device-secret-key-2026
+      - key: CORS_ORIGINS
+        value: "https://fixai-guardian.vercel.app,http://localhost:5173"
+      - key: DATABASE_URL
+        value: "sqlite+aiosqlite:///./fixai.db"
