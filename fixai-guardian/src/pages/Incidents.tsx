@@ -27,6 +27,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { CausalGraphView } from "@/components/fixai/CausalGraphView";
 import { ProcessTreeVisualizer } from "@/components/fixai/ProcessTreeVisualizer";
+import { ForensicReportModal } from "@/components/fixai/ForensicReportModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { CausalGraph } from "@/lib/types";
 import { fetchUnifiedIncidents } from "@/lib/history-store";
@@ -54,6 +55,7 @@ export default function Incidents() {
   const convexRows = useQuery(api.history.listIncidents, { limit: 50 });
   const [unifiedRows, setUnifiedRows] = useState<Row[]>([]);
   const [selected, setSelected] = useState<Row | null>(null);
+  const [reportIncident, setReportIncident] = useState<Row | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -180,14 +182,25 @@ export default function Incidents() {
           {selected ? (
             <div className="mx-auto w-full max-w-2xl overflow-y-auto px-4 pb-8">
               <DrawerHeader className="px-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <IncidentStatusBadge status={selected.status} />
-                  <RiskTierBadge tier={selected.risk} />
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {new Date(selected.detectedAt).toLocaleString()}
-                  </span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <IncidentStatusBadge status={selected.status} />
+                    <RiskTierBadge tier={selected.risk} />
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {new Date(selected.detectedAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setReportIncident(selected)}
+                    className="h-7 gap-1.5 text-xs font-semibold border-primary/40 text-primary hover:bg-primary/10"
+                  >
+                    <FileText className="size-3.5" />
+                    Export Forensic Report (PDF)
+                  </Button>
                 </div>
-                <DrawerTitle className="text-xl">{selected.primaryCause}</DrawerTitle>
+                <DrawerTitle className="text-xl mt-1">{selected.primaryCause}</DrawerTitle>
                 <DrawerDescription className="text-sm leading-relaxed">
                   {selected.explanation}
                 </DrawerDescription>
@@ -319,6 +332,21 @@ export default function Incidents() {
           ) : null}
         </DrawerContent>
       </Drawer>
+
+      {/* Forensic Report Modal */}
+      {reportIncident && (
+        <ForensicReportModal
+          isOpen={reportIncident !== null}
+          onClose={() => setReportIncident(null)}
+          incidentId={reportIncident._id}
+          primaryCause={reportIncident.primaryCause}
+          explanation={reportIncident.explanation}
+          riskTier={reportIncident.risk}
+          status={reportIncident.status}
+          playbookName={reportIncident.playbookName || undefined}
+          logEvidence={reportIncident.logEvidence}
+        />
+      )}
     </div>
   );
 }

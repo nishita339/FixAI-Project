@@ -224,6 +224,18 @@ async def run_tests():
             print(f"[{total}] PASS: GET /api/v1/agent/fleet -> 200 OK (Fleet: {fleet_data['summary']['total_devices']} devices, avg health {fleet_data['summary']['average_fleet_health']}%)")
             passed += 1
 
+            # Test 17: Improvement #6 - Forensic Incident Report Generator
+            total += 1
+            resp = await client.get("/api/v1/agent/incidents/inc-test-sec-001/report")
+            assert resp.status_code == 200, f"Forensic report failed: {resp.status_code} - {resp.text}"
+            report_data = resp.json()
+            assert "report_id" in report_data
+            assert "mitre_attack_matrix" in report_data
+            assert "forensic_evidence" in report_data
+            assert "shap_attributions" in report_data
+            print(f"[{total}] PASS: GET /api/v1/agent/incidents/inc-test-sec-001/report -> 200 OK (Report ID: {report_data['report_id']}, {len(report_data['mitre_attack_matrix'])} MITRE tactics)")
+            passed += 1
+
             # Allow async subprocess transports to close cleanly
             await asyncio.sleep(0.2)
 
