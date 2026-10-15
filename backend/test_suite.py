@@ -274,6 +274,23 @@ async def run_tests():
             print(f"[{total}] PASS: GET /api/v1/agent/hardware-rul -> 200 OK (Score: {rul_data['overall_hardware_score']}%, Battery: {rul_data['battery']['capacity_percent']}%, SSD: {rul_data['storage']['health_percent']}%)")
             passed += 1
 
+            # Test 21: Improvement #11 - PostgreSQL Cloud Database Support & Pooling
+            total += 1
+            from app.database import normalize_database_url
+            # Test URL normalizer
+            n_url, c_args = normalize_database_url("postgres://u:p@db.neon.tech/fixai?sslmode=require")
+            assert n_url.startswith("postgresql+asyncpg://"), f"Failed prefix: {n_url}"
+            assert "sslmode" not in n_url, f"sslmode not stripped: {n_url}"
+            assert c_args.get("ssl") == "require", f"SSL not set in connect_args: {c_args}"
+
+            resp = await client.get("/api/v1/system/db-status")
+            assert resp.status_code == 200, f"DB status failed: {resp.status_code} - {resp.text}"
+            db_status = resp.json()
+            assert db_status["status"] == "HEALTHY"
+            assert db_status["ping"] == "OK"
+            print(f"[{total}] PASS: GET /api/v1/system/db-status -> 200 OK (Dialect: {db_status['dialect']}, Pool Ping: {db_status['ping']}, Pre-Ping: {db_status['pool_pre_ping']})")
+            passed += 1
+
             # Allow async subprocess transports to close cleanly
             await asyncio.sleep(0.2)
 

@@ -153,6 +153,18 @@ async def health_check():
     }
 
 
+@app.get("/api/v1/system/db-status")
+async def database_status():
+    """
+    GET /api/v1/system/db-status
+    Improvement #11: Returns database connection status, dialect (PostgreSQL vs SQLite),
+    and active connection pool health.
+    """
+    from app.database import check_database_health
+    return await check_database_health()
+
+
 @app.get("/")
 async def root():
     return {"message": "FixAI Backend API is operational"}
+
