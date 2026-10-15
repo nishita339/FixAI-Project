@@ -10,6 +10,7 @@ Unified cybersecurity modules:
 - Phase 5: Plain-English Security Alerts & Desktop Notifications (IPC Bridge)
 - Improvement #1: Telegram / Discord / Slack Webhook Alerts
 - Improvement #2: Ransomware Canary / Honeypot Decoy Files
+- Improvement #7: Network Socket & C2 Beaconing Monitor
 """
 
 from .event_monitor import EventMonitor, BruteForceAlert
@@ -37,6 +38,13 @@ from .ransomware_canary import (
     RansomwareCanaryAlert,
     CanaryRecord,
     CANARY_MAGIC,
+)
+from .network_monitor import (
+    NetworkMonitor,
+    NetworkConnection,
+    C2BeaconAlert,
+    calculate_domain_entropy,
+    is_private_or_loopback_ip,
 )
 
 __all__ = [
@@ -69,4 +77,11 @@ __all__ = [
     "RansomwareCanaryAlert",
     "CanaryRecord",
     "CANARY_MAGIC",
+    # Improvement #7
+    "NetworkMonitor",
+    "NetworkConnection",
+    "C2BeaconAlert",
+    "calculate_domain_entropy",
+    "is_private_or_loopback_ip",
 ]
+

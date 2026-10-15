@@ -390,6 +390,86 @@ class SecurityNLGEngine:
             },
         )
 
+    @staticmethod
+    def narrate_network_c2_threat(
+        alert_type: str,
+        process_name: str,
+        pid: int,
+        remote_ip: str,
+        remote_port: int,
+        domain: str,
+        beacon_interval_seconds: float,
+        jitter_ratio: float,
+        connection_count: int,
+        mitre_technique: str,
+        description: str,
+        severity: str = "HIGH",
+    ) -> SecurityAlertMessage:
+        """Improvement #7: C2 Beaconing or suspicious network socket detected."""
+        import uuid
+
+        if alert_type == "C2_BEACONING":
+            title = "\U0001f4e1 C2 BEACONING DETECTED — Robotic Outbound Heartbeat"
+            threat = (
+                f"Active Command-and-Control (C2) communication detected. Process '{process_name}' "
+                f"(PID {pid}) is contacting external destination {domain}:{remote_port} on a precise "
+                f"periodic cadence of ~{beacon_interval_seconds:.1f}s (jitter: {jitter_ratio * 100:.1f}%, "
+                f"{connection_count} recorded cycles). This low variation is a hallmark of automated malware beaconing."
+            )
+        elif alert_type == "TUNNEL_PROXY":
+            title = "\u26a0\ufe0f Covert Reverse Tunnel Connection Intercepted"
+            threat = (
+                f"Suspicious reverse proxy or tunnel connection detected from '{process_name}' (PID {pid}) "
+                f"to dynamic DNS / tunneling provider {domain}:{remote_port}. Attackers frequently use covert "
+                f"tunnels to bypass corporate firewalls and ingress filtering."
+            )
+        elif alert_type == "DGA_DOMAIN":
+            title = "\u26a0\ufe0f Algorithmic DGA C2 Domain Contacted"
+            threat = (
+                f"Process '{process_name}' (PID {pid}) initiated communication with a high-entropy domain "
+                f"'{domain}' (target: {remote_ip}:{remote_port}). High Shannon entropy indicates algorithmically "
+                f"generated domain names (DGA) designed to evade static domain blacklists."
+            )
+        else:
+            title = "\u26a0\ufe0f Suspicious Outbound Network Socket Detected"
+            threat = (
+                f"Abnormal network connection detected: '{process_name}' (PID {pid}) established an outbound socket "
+                f"to {domain}:{remote_port}. {description}"
+            )
+
+        return SecurityAlertMessage(
+            alert_id=str(uuid.uuid4()),
+            timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            severity=severity,
+            alert_type=alert_type,
+            title=title,
+            threat_description=threat,
+            action_taken=(
+                f"Target socket {domain}:{remote_port} logged and flagged for containment. "
+                f"Process {process_name} (PID {pid}) queued for inspection."
+            ),
+            actionable_steps=[
+                f"Terminate the originating process '{process_name}' (PID {pid}) via Task Manager or FixAI Console.",
+                f"Block outbound traffic to {remote_ip}:{remote_port} on your edge firewall or router.",
+                "Inspect the binary path of the originating executable for unsigned or spoofed signatures.",
+                "Review active network sockets and DNS cache (`ipconfig /displaydns`) for related domains.",
+            ],
+            source_module="network_monitor",
+            raw_details={
+                "alert_type": alert_type,
+                "process_name": process_name,
+                "pid": pid,
+                "remote_ip": remote_ip,
+                "remote_port": remote_port,
+                "domain": domain,
+                "beacon_interval_seconds": beacon_interval_seconds,
+                "jitter_ratio": jitter_ratio,
+                "connection_count": connection_count,
+                "mitre_technique": mitre_technique,
+            },
+        )
+
+
 
 # ============================================================================
 # Desktop Notification Dispatcher (desktop-notifier + fallback)
@@ -672,6 +752,30 @@ class AlertBridge:
             original_sha256=getattr(canary_alert, "original_sha256", ""),
             canary_dir=getattr(canary_alert, "canary_dir", ""),
             details=getattr(canary_alert, "details", ""),
+        )
+        self._dispatch(alert_msg)
+
+    # ================================================================
+    # Improvement #7 Callback: Network C2 Beaconing Alert
+    # ================================================================
+    def on_network_c2_alert(self, c2_alert: Any) -> None:
+        """
+        Receives a C2BeaconAlert from the NetworkMonitor and translates
+        it into a plain-English desktop + webhook notification.
+        """
+        alert_msg = self.nlg.narrate_network_c2_threat(
+            alert_type=getattr(c2_alert, "alert_type", "SUSPICIOUS_OUTBOUND"),
+            process_name=getattr(c2_alert, "process_name", "unknown"),
+            pid=getattr(c2_alert, "pid", 0),
+            remote_ip=getattr(c2_alert, "remote_ip", ""),
+            remote_port=getattr(c2_alert, "remote_port", 0),
+            domain=getattr(c2_alert, "domain", ""),
+            beacon_interval_seconds=getattr(c2_alert, "beacon_interval_seconds", 0.0),
+            jitter_ratio=getattr(c2_alert, "jitter_ratio", 0.0),
+            connection_count=getattr(c2_alert, "connection_count", 0),
+            mitre_technique=getattr(c2_alert, "mitre_technique", ""),
+            description=getattr(c2_alert, "description", ""),
+            severity=getattr(c2_alert, "severity", "HIGH"),
         )
         self._dispatch(alert_msg)
 

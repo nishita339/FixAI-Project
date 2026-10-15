@@ -236,6 +236,18 @@ async def run_tests():
             print(f"[{total}] PASS: GET /api/v1/agent/incidents/inc-test-sec-001/report -> 200 OK (Report ID: {report_data['report_id']}, {len(report_data['mitre_attack_matrix'])} MITRE tactics)")
             passed += 1
 
+            # Test 18: Improvement #7 - Network Socket & C2 Beaconing Monitor
+            total += 1
+            resp = await client.get("/api/v1/agent/network-connections")
+            assert resp.status_code == 200, f"Network connections endpoint failed: {resp.status_code} - {resp.text}"
+            net_data = resp.json()
+            assert "summary" in net_data
+            assert "connections" in net_data
+            assert "c2_beacons" in net_data
+            assert net_data["summary"]["engine_status"] == "ONLINE"
+            print(f"[{total}] PASS: GET /api/v1/agent/network-connections -> 200 OK ({net_data['summary']['total_sockets_scanned']} sockets, {len(net_data['c2_beacons'])} C2 beacons tracked)")
+            passed += 1
+
             # Allow async subprocess transports to close cleanly
             await asyncio.sleep(0.2)
 
