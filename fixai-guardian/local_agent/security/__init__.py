@@ -46,6 +46,10 @@ from .network_monitor import (
     calculate_domain_entropy,
     is_private_or_loopback_ip,
 )
+from .self_defense import (
+    AgentSelfDefense,
+    TamperIncident,
+)
 
 __all__ = [
     # Phase 1
@@ -83,5 +87,9 @@ __all__ = [
     "C2BeaconAlert",
     "calculate_domain_entropy",
     "is_private_or_loopback_ip",
+    # Improvement #8
+    "AgentSelfDefense",
+    "TamperIncident",
 ]
+
 

@@ -248,6 +248,19 @@ async def run_tests():
             print(f"[{total}] PASS: GET /api/v1/agent/network-connections -> 200 OK ({net_data['summary']['total_sockets_scanned']} sockets, {len(net_data['c2_beacons'])} C2 beacons tracked)")
             passed += 1
 
+            # Test 19: Improvement #8 - Agent Self-Defense & Anti-Tamper
+            total += 1
+            resp = await client.get("/api/v1/agent/self-defense/status")
+            assert resp.status_code == 200, f"Self-defense status endpoint failed: {resp.status_code} - {resp.text}"
+            def_data = resp.json()
+            assert def_data["status"] == "ARMED"
+            assert "watchdog" in def_data
+            assert "file_integrity_monitoring" in def_data
+            assert "anti_tamper_controls" in def_data
+            assert def_data["watchdog"]["heartbeat_health"] == "HEALTHY"
+            print(f"[{total}] PASS: GET /api/v1/agent/self-defense/status -> 200 OK (Status: {def_data['status']}, FIM: {def_data['file_integrity_monitoring']['monitored_assets_count']} assets guarded)")
+            passed += 1
+
             # Allow async subprocess transports to close cleanly
             await asyncio.sleep(0.2)
 

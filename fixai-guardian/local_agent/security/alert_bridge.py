@@ -469,6 +469,66 @@ class SecurityNLGEngine:
             },
         )
 
+    @staticmethod
+    def narrate_agent_tamper(
+        tamper_type: str,
+        target_path: Optional[str] = None,
+        expected_sha256: Optional[str] = None,
+        actual_sha256: Optional[str] = None,
+        description: str = "",
+        severity: str = "CRITICAL",
+    ) -> SecurityAlertMessage:
+        """Improvement #8: Agent Self-Defense & Anti-Tamper Incident."""
+        import uuid
+
+        if tamper_type == "FILE_DELETED":
+            title = "\U0001f6a8 AGENT TAMPER DETECTED \u2014 Core Security File Deleted"
+            threat = (
+                f"Adversary defense-evasion attempt detected. FixAI critical asset '{target_path}' "
+                f"was deleted from the filesystem. Attackers commonly delete EDR components to blind SOC visibility."
+            )
+        elif tamper_type == "FILE_MODIFIED":
+            title = "\U0001f6a8 AGENT TAMPER DETECTED \u2014 Security Asset Modified"
+            threat = (
+                f"FixAI integrity violation detected. Critical asset '{target_path}' was modified unauthorizedly. "
+                f"Cryptographic hash mismatch (expected: {expected_sha256[:12] if expected_sha256 else 'N/A'}..., "
+                f"actual: {actual_sha256[:12] if actual_sha256 else 'N/A'}...). Potential malware tampering."
+            )
+        elif tamper_type == "HEARTBEAT_TIMEOUT":
+            title = "\U0001f6a8 AGENT HEARTBEAT TIMEOUT \u2014 Potential Process Termination"
+            threat = (
+                f"The FixAI Agent self-defense heartbeat ceased. {description} "
+                f"This indicates the agent was forcibly terminated (SIGKILL, taskkill) or suspended by an attacker."
+            )
+        else:
+            title = "\U0001f6a8 AGENT SELF-DEFENSE ALERT \u2014 Unauthorized Tamper Attempt"
+            threat = description or "An unauthorized attempt to impair FixAI security defenses was intercepted."
+
+        return SecurityAlertMessage(
+            alert_id=str(uuid.uuid4()),
+            timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            severity=severity,
+            alert_type="AGENT_TAMPER",
+            title=title,
+            threat_description=threat,
+            action_taken="Self-defense guardian activated. Alert dispatched to desktop and webhooks. Asset recovery queued.",
+            actionable_steps=[
+                "Check Task Manager to ensure FixAI Guardian background service is running.",
+                "Review recent process execution logs for unauthorized `taskkill`, `sc stop`, or `Stop-Process` commands.",
+                "Perform an offline anti-malware scan to eliminate active rootkits or defense-evading malware.",
+                "Verify file integrity and restore baselines via FixAI Recovery Console.",
+            ],
+            source_module="self_defense",
+            raw_details={
+                "tamper_type": tamper_type,
+                "target_path": target_path,
+                "expected_sha256": expected_sha256,
+                "actual_sha256": actual_sha256,
+                "mitre_technique": "T1562.001",
+            },
+        )
+
+
 
 
 # ============================================================================
@@ -776,6 +836,24 @@ class AlertBridge:
             mitre_technique=getattr(c2_alert, "mitre_technique", ""),
             description=getattr(c2_alert, "description", ""),
             severity=getattr(c2_alert, "severity", "HIGH"),
+        )
+        self._dispatch(alert_msg)
+
+    # ================================================================
+    # Improvement #8 Callback: Agent Self-Defense & Anti-Tamper Alert
+    # ================================================================
+    def on_agent_tamper_alert(self, tamper_incident: Any) -> None:
+        """
+        Receives a TamperIncident from AgentSelfDefense and translates
+        it into a CRITICAL desktop notification and webhook broadcast.
+        """
+        alert_msg = self.nlg.narrate_agent_tamper(
+            tamper_type=getattr(tamper_incident, "tamper_type", "UNKNOWN"),
+            target_path=getattr(tamper_incident, "target_path", None),
+            expected_sha256=getattr(tamper_incident, "expected_sha256", None),
+            actual_sha256=getattr(tamper_incident, "actual_sha256", None),
+            description=getattr(tamper_incident, "description", ""),
+            severity=getattr(tamper_incident, "severity", "CRITICAL"),
         )
         self._dispatch(alert_msg)
 
