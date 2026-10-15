@@ -261,6 +261,19 @@ async def run_tests():
             print(f"[{total}] PASS: GET /api/v1/agent/self-defense/status -> 200 OK (Status: {def_data['status']}, FIM: {def_data['file_integrity_monitoring']['monitored_assets_count']} assets guarded)")
             passed += 1
 
+            # Test 20: Improvement #9 - RUL Hardware Life Predictor
+            total += 1
+            resp = await client.get("/api/v1/agent/hardware-rul")
+            assert resp.status_code == 200, f"Hardware RUL endpoint failed: {resp.status_code} - {resp.text}"
+            rul_data = resp.json()
+            assert "overall_hardware_score" in rul_data
+            assert "battery" in rul_data
+            assert "storage" in rul_data
+            assert "ml_model_metadata" in rul_data
+            assert rul_data["overall_hardware_score"] > 0
+            print(f"[{total}] PASS: GET /api/v1/agent/hardware-rul -> 200 OK (Score: {rul_data['overall_hardware_score']}%, Battery: {rul_data['battery']['capacity_percent']}%, SSD: {rul_data['storage']['health_percent']}%)")
+            passed += 1
+
             # Allow async subprocess transports to close cleanly
             await asyncio.sleep(0.2)
 
