@@ -335,6 +335,61 @@ class SecurityNLGEngine:
             },
         )
 
+    @staticmethod
+    def narrate_ransomware_canary(
+        event_type: str,
+        canary_filename: str,
+        canary_path: str,
+        original_sha256: str,
+        canary_dir: str,
+        details: str = "",
+    ) -> SecurityAlertMessage:
+        """Improvement #2: Ransomware canary file tampering detected."""
+        import uuid
+
+        event_descriptions = {
+            "MODIFIED": "encrypted or modified",
+            "DELETED": "deleted",
+            "MOVED": "renamed or moved",
+        }
+        event_verb = event_descriptions.get(event_type, "tampered with")
+
+        return SecurityAlertMessage(
+            alert_id=str(uuid.uuid4()),
+            timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            severity="CRITICAL",
+            alert_type="RANSOMWARE_CANARY",
+            title="\U0001f6a8 RANSOMWARE DETECTED — Canary File Compromised",
+            threat_description=(
+                f"CRITICAL: A honeypot canary file '{canary_filename}' in {canary_dir} "
+                f"was {event_verb}. This is a strong indicator that active ransomware "
+                f"is encrypting files on your system. No legitimate software should ever "
+                f"modify FixAI canary files."
+            ),
+            action_taken=(
+                f"Ransomware canary alert triggered. The affected file was at: {canary_path}. "
+                f"FixAI has flagged this as a CRITICAL zero-day ransomware event. "
+                f"Webhooks and desktop notifications have been dispatched."
+            ),
+            actionable_steps=[
+                "IMMEDIATELY disconnect from all networks (Wi-Fi, Ethernet, VPN).",
+                "DO NOT restart or shut down your computer — this may worsen encryption.",
+                "Run a full offline antivirus scan from a bootable USB drive.",
+                "Check for ransom notes (.txt, .html files) on your Desktop and Documents.",
+                "Contact your IT security team or incident response provider immediately.",
+                "Preserve forensic evidence — do not delete any suspicious files.",
+            ],
+            source_module="ransomware_canary",
+            raw_details={
+                "event_type": event_type,
+                "canary_filename": canary_filename,
+                "canary_path": canary_path,
+                "original_sha256": original_sha256,
+                "canary_dir": canary_dir,
+                "details": details,
+            },
+        )
+
 
 # ============================================================================
 # Desktop Notification Dispatcher (desktop-notifier + fallback)
@@ -599,6 +654,24 @@ class AlertBridge:
             ip=ip,
             rule_name=rule_name,
             reason=reason,
+        )
+        self._dispatch(alert_msg)
+
+    # ================================================================
+    # Improvement #2 Callback: Ransomware Canary Alert
+    # ================================================================
+    def on_ransomware_canary_alert(self, canary_alert: Any) -> None:
+        """
+        Receives a RansomwareCanaryAlert from the canary honeypot system
+        and translates it into a CRITICAL desktop + webhook notification.
+        """
+        alert_msg = self.nlg.narrate_ransomware_canary(
+            event_type=getattr(canary_alert, "event_type", "MODIFIED"),
+            canary_filename=getattr(canary_alert, "canary_filename", "unknown"),
+            canary_path=getattr(canary_alert, "canary_path", ""),
+            original_sha256=getattr(canary_alert, "original_sha256", ""),
+            canary_dir=getattr(canary_alert, "canary_dir", ""),
+            details=getattr(canary_alert, "details", ""),
         )
         self._dispatch(alert_msg)
 

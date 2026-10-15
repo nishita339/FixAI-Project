@@ -9,6 +9,7 @@ Unified cybersecurity modules:
 - Phase 4: Guarded Quarantine & Network Isolation (AES-256 Vault & Firewall)
 - Phase 5: Plain-English Security Alerts & Desktop Notifications (IPC Bridge)
 - Improvement #1: Telegram / Discord / Slack Webhook Alerts
+- Improvement #2: Ransomware Canary / Honeypot Decoy Files
 """
 
 from .event_monitor import EventMonitor, BruteForceAlert
@@ -30,6 +31,12 @@ from .alert_bridge import (
 from .webhook_notifier import (
     WebhookNotifier,
     WebhookConfig,
+)
+from .ransomware_canary import (
+    RansomwareCanary,
+    RansomwareCanaryAlert,
+    CanaryRecord,
+    CANARY_MAGIC,
 )
 
 __all__ = [
@@ -57,4 +64,9 @@ __all__ = [
     # Improvement #1
     "WebhookNotifier",
     "WebhookConfig",
+    # Improvement #2
+    "RansomwareCanary",
+    "RansomwareCanaryAlert",
+    "CanaryRecord",
+    "CANARY_MAGIC",
 ]
