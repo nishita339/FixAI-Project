@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     CONVEX_DEVICE_API_KEY: str = os.getenv("CONVEX_DEVICE_API_KEY", _DEFAULT_DEVICE_KEY)
     DEFAULT_DEVICE_KEY: str = os.getenv("DEFAULT_DEVICE_KEY", _DEFAULT_DEVICE_KEY)
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 
     model_config = {
         "case_sensitive": False,

@@ -196,6 +196,23 @@ async def run_tests():
             print(f"[{total}] PASS: POST /api/v1/agent/terminate-process -> Protected PID 4 blocked (403), PID 999999 terminated safely")
             passed += 1
 
+            # Test 15: Improvement #4 - AI Security Copilot Chat Assistant
+            total += 1
+            copilot_payload = {
+                "message": "How do I mitigate the WMI persistence threat and what MITRE techniques apply?",
+                "history": [],
+                "telemetry_context": {"cpu": 28.5, "ram": 56.0, "latency": 15.0},
+            }
+            resp = await client.post("/api/v1/agent/copilot/chat", json=copilot_payload)
+            assert resp.status_code == 200, f"Copilot chat failed: {resp.status_code} - {resp.text}"
+            copilot_data = resp.json()
+            assert "reply" in copilot_data
+            assert "suggested_actions" in copilot_data
+            assert "mitre_references" in copilot_data
+            assert len(copilot_data["reply"]) > 20
+            print(f"[{total}] PASS: POST /api/v1/agent/copilot/chat -> 200 OK (AI Copilot returned {len(copilot_data['reply'])} chars, {len(copilot_data['suggested_actions'])} actions)")
+            passed += 1
+
             # Allow async subprocess transports to close cleanly
             await asyncio.sleep(0.2)
 

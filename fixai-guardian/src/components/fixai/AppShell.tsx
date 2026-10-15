@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
+import { SecurityCopilot } from "@/components/fixai/SecurityCopilot";
 
 const NAV = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -322,6 +323,9 @@ export default function AppShell() {
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
           <Outlet context={agent} />
         </main>
+
+        {/* Global Autonomous AI Security Copilot */}
+        <SecurityCopilot />
       </div>
     </div>
   );

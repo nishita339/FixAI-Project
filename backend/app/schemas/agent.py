@@ -124,3 +124,24 @@ class TerminateProcessPayload(BaseModel):
     pid: int
     device_id: Optional[str] = None
     reason: Optional[str] = "Malicious process terminated via FixAI Process Tree Visualizer"
+
+
+class CopilotMessage(BaseModel):
+    role: str  # "user", "assistant", "system"
+    content: str
+    timestamp: Optional[str] = None
+
+
+class CopilotChatPayload(BaseModel):
+    message: str
+    history: List[CopilotMessage] = []
+    device_id: Optional[str] = None
+    telemetry_context: Optional[Dict[str, Any]] = None
+    incident_context: Optional[Dict[str, Any]] = None
+
+
+class CopilotChatResponse(BaseModel):
+    reply: str
+    suggested_actions: List[str] = []
+    playbook_recommendations: List[str] = []
+    mitre_references: List[str] = []
