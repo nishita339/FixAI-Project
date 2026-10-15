@@ -8,6 +8,7 @@ Unified cybersecurity modules:
 - Phase 3: Fileless Threat Hunting (WMI Persistence & LotL Process Tree Lineage)
 - Phase 4: Guarded Quarantine & Network Isolation (AES-256 Vault & Firewall)
 - Phase 5: Plain-English Security Alerts & Desktop Notifications (IPC Bridge)
+- Improvement #1: Telegram / Discord / Slack Webhook Alerts
 """
 
 from .event_monitor import EventMonitor, BruteForceAlert
@@ -25,6 +26,10 @@ from .alert_bridge import (
     SecurityAlertMessage,
     SecurityNLGEngine,
     DesktopNotifier,
+)
+from .webhook_notifier import (
+    WebhookNotifier,
+    WebhookConfig,
 )
 
 __all__ = [
@@ -49,4 +54,7 @@ __all__ = [
     "SecurityAlertMessage",
     "SecurityNLGEngine",
     "DesktopNotifier",
+    # Improvement #1
+    "WebhookNotifier",
+    "WebhookConfig",
 ]

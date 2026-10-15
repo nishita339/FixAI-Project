@@ -39,6 +39,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
+from .webhook_notifier import WebhookNotifier, WebhookConfig
+
 logger = logging.getLogger("fixai.security.alert_bridge")
 if not logger.handlers:
     handler = logging.StreamHandler()
@@ -475,16 +477,18 @@ class AlertBridge:
         self,
         enable_desktop_notifications: bool = True,
         on_alert_callback: Optional[Callable[[SecurityAlertMessage], None]] = None,
+        webhook_config: Optional[WebhookConfig] = None,
     ):
         self.nlg = SecurityNLGEngine()
         self.notifier = DesktopNotifier() if enable_desktop_notifications else None
+        self.webhook = WebhookNotifier(webhook_config)
         self.on_alert_callback = on_alert_callback
         self._alert_history: List[SecurityAlertMessage] = []
         self._alert_history_lock = threading.Lock()
         logger.info("AlertBridge initialized — Security IPC to desktop active")
 
     def _dispatch(self, alert: SecurityAlertMessage) -> None:
-        """Central dispatch: log → desktop notification → callback → history."""
+        """Central dispatch: log → desktop notification → webhook → callback → history."""
         logger.warning(
             f"\U0001f514 [{alert.severity}] {alert.title} | "
             f"Type: {alert.alert_type} | Module: {alert.source_module}"
@@ -497,14 +501,20 @@ class AlertBridge:
             except Exception as e:
                 logger.debug(f"Desktop notification dispatch error: {e}")
 
-        # 2. Optional callback (e.g. to send to backend/Convex)
+        # 2. Webhook notifications (Telegram / Discord / Slack)
+        try:
+            self.webhook.send(alert)
+        except Exception as e:
+            logger.debug(f"Webhook dispatch error: {e}")
+
+        # 3. Optional callback (e.g. to send to backend/Convex)
         if self.on_alert_callback:
             try:
                 self.on_alert_callback(alert)
             except Exception as e:
                 logger.debug(f"Alert callback error: {e}")
 
-        # 3. Append to history
+        # 4. Append to history
         with self._alert_history_lock:
             self._alert_history.append(alert)
             # Keep history bounded
