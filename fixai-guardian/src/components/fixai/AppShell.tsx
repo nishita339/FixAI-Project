@@ -28,6 +28,7 @@ import {
   Monitor,
   Moon,
   RadioTower,
+  Server,
   Settings,
   ShieldCheck,
   Sun,
@@ -40,6 +41,7 @@ import { SecurityCopilot } from "@/components/fixai/SecurityCopilot";
 
 const NAV = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { to: "/dashboard/fleet", label: "Fleet Command", icon: Server },
   { to: "/dashboard/hardware", label: "Laptop Doctor", icon: Laptop },
   { to: "/dashboard/monitor", label: "Live Telemetry", icon: Activity },
   { to: "/dashboard/incidents", label: "Incidents & Threats", icon: Monitor },

@@ -19,6 +19,7 @@ const Recovery = lazy(() => import("./pages/Recovery.tsx"));
 const LaptopDoctor = lazy(() => import("./pages/LaptopDoctor.tsx"));
 const History = lazy(() => import("./pages/History.tsx"));
 const Permissions = lazy(() => import("./pages/Permissions.tsx"));
+const Fleet = lazy(() => import("./pages/Fleet.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -99,6 +100,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="recovery" element={<Recovery />} />
                 <Route path="history" element={<History />} />
                 <Route path="permissions" element={<Permissions />} />
+                <Route path="fleet" element={<Fleet />} />
               </Route>
               {/* Demo route renders Dashboard inside AppShell without auth */}
               <Route path="/demo" element={<AppShell />}>
@@ -107,6 +109,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="monitor" element={<Monitor />} />
                 <Route path="incidents" element={<Incidents />} />
                 <Route path="recovery" element={<Recovery />} />
+                <Route path="fleet" element={<Fleet />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

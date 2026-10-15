@@ -213,6 +213,17 @@ async def run_tests():
             print(f"[{total}] PASS: POST /api/v1/agent/copilot/chat -> 200 OK (AI Copilot returned {len(copilot_data['reply'])} chars, {len(copilot_data['suggested_actions'])} actions)")
             passed += 1
 
+            # Test 16: Improvement #5 - Multi-Device Fleet Overview
+            total += 1
+            resp = await client.get("/api/v1/agent/fleet")
+            assert resp.status_code == 200, f"Fleet endpoint failed: {resp.status_code} - {resp.text}"
+            fleet_data = resp.json()
+            assert "summary" in fleet_data
+            assert "devices" in fleet_data
+            assert fleet_data["summary"]["total_devices"] >= 1
+            print(f"[{total}] PASS: GET /api/v1/agent/fleet -> 200 OK (Fleet: {fleet_data['summary']['total_devices']} devices, avg health {fleet_data['summary']['average_fleet_health']}%)")
+            passed += 1
+
             # Allow async subprocess transports to close cleanly
             await asyncio.sleep(0.2)
 
