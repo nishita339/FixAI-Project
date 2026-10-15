@@ -15,6 +15,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import {
   Activity,
+  AlertOctagon,
   ChevronDown,
   Cpu,
   Gauge,
@@ -30,14 +31,20 @@ import {
   RadioTower,
   Server,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   Sun,
+  Volume2,
+  VolumeX,
   Wrench,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { SecurityCopilot } from "@/components/fixai/SecurityCopilot";
+import { EmergencyLockdownModal } from "@/components/fixai/EmergencyLockdownModal";
+import { audioAlerts } from "@/lib/audio-alerts";
+
 
 const NAV = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
@@ -119,10 +126,32 @@ export default function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const agent: FixAiAgent = useFixAiAgent();
 
+  const [lockdownOpen, setLockdownOpen] = useState(false);
+  const [isLockdownActive, setIsLockdownActive] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("fixai_lockdown_active") === "true";
+    }
+    return false;
+  });
+  const [isAudioMuted, setIsAudioMuted] = useState(audioAlerts.getMuted());
+
+  const handleToggleLockdown = (active: boolean) => {
+    setIsLockdownActive(active);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("fixai_lockdown_active", String(active));
+    }
+  };
+
+  const handleToggleAudio = () => {
+    const next = audioAlerts.toggleMute();
+    setIsAudioMuted(next);
+  };
+
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
   };
+
 
   const displayName = user?.name || user?.email?.split("@")[0] || "SecOps Lead";
 
@@ -251,12 +280,45 @@ export default function AppShell() {
               </div>
             </div>
 
-            {/* Right side controls: Health Score, Theme Switcher, User Menu */}
-            <div className="ml-auto flex items-center gap-2.5 sm:gap-3">
+            {/* Right side controls: Lockdown, Audio, Health Score, Theme Switcher, User Menu */}
+            <div className="ml-auto flex items-center gap-2 sm:gap-2.5">
+              {/* Emergency Lockdown Action Button */}
+              <Button
+                variant={isLockdownActive ? "destructive" : "outline"}
+                size="sm"
+                onClick={() => setLockdownOpen(true)}
+                className={cn(
+                  "h-8 gap-1.5 rounded-lg text-xs font-bold transition-all px-2.5",
+                  isLockdownActive
+                    ? "bg-rose-600 text-white animate-pulse border-rose-500 shadow-md shadow-rose-900/50"
+                    : "border-rose-500/40 text-rose-500 hover:bg-rose-500/10 hover:border-rose-500"
+                )}
+                title="Emergency System Lockdown & Air-Gap"
+              >
+                <AlertOctagon className="size-3.5 shrink-0" />
+                <span className="hidden sm:inline">{isLockdownActive ? "AIR-GAP ACTIVE" : "LOCKDOWN"}</span>
+              </Button>
+
+              {/* Tactical Audio Alerts Toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleToggleAudio}
+                className="size-8.5 rounded-xl border border-border/70 hover:bg-accent hover:border-primary/40 transition-colors"
+                title={isAudioMuted ? "Unmute audio alerts" : "Mute audio alerts"}
+                aria-label="Toggle audio alerts"
+              >
+                {isAudioMuted ? (
+                  <VolumeX className="size-4 text-muted-foreground" />
+                ) : (
+                  <Volume2 className="size-4 text-emerald-500 animate-pulse" />
+                )}
+              </Button>
+
               {/* Overall Health Pill */}
-              <div className="flex items-center gap-1.5 rounded-lg border border-border/80 bg-card/70 px-3 py-1.5 text-xs font-semibold shadow-xs">
+              <div className="flex items-center gap-1.5 rounded-lg border border-border/80 bg-card/70 px-2.5 py-1.5 text-xs font-semibold shadow-xs">
                 <Gauge className="size-3.5 text-primary" />
-                <span className="text-muted-foreground font-normal">Health</span>
+                <span className="text-muted-foreground font-normal hidden sm:inline">Health</span>
                 <span
                   className={cn(
                     "tabular-nums font-bold",
@@ -276,14 +338,14 @@ export default function AppShell() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setTheme(isDark ? "light" : "dark")}
-                className="size-9 rounded-xl border border-border/70 hover:bg-accent hover:border-primary/40 transition-colors"
+                className="size-8.5 rounded-xl border border-border/70 hover:bg-accent hover:border-primary/40 transition-colors"
                 title={`Switch to ${isDark ? "Light" : "Dark"} mode`}
                 aria-label="Toggle theme"
               >
                 {isDark ? (
-                  <Sun className="size-4.5 text-amber-400 transition-transform duration-300 hover:rotate-45" />
+                  <Sun className="size-4 text-amber-400 transition-transform duration-300 hover:rotate-45" />
                 ) : (
-                  <Moon className="size-4.5 text-slate-700 transition-transform duration-300 hover:-rotate-12" />
+                  <Moon className="size-4 text-slate-700 transition-transform duration-300 hover:-rotate-12" />
                 )}
               </Button>
 
@@ -291,7 +353,7 @@ export default function AppShell() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="gap-2 rounded-xl px-2 hover:bg-accent/60">
-                    <div className="flex size-7.5 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-cyan-500 text-xs font-bold text-primary-foreground shadow-xs uppercase">
+                    <div className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-cyan-500 text-xs font-bold text-primary-foreground shadow-xs uppercase">
                       {displayName.slice(0, 2)}
                     </div>
                     <span className="hidden text-xs font-semibold md:inline">{displayName}</span>
@@ -322,13 +384,40 @@ export default function AppShell() {
           </div>
         </header>
 
+        {/* Active Emergency Lockdown Top Banner */}
+        {isLockdownActive && (
+          <div className="bg-rose-600 text-white px-4 py-2 flex items-center justify-between text-xs font-bold shadow-md z-20 animate-pulse">
+            <div className="flex items-center gap-2">
+              <AlertOctagon className="size-4 shrink-0" />
+              <span>EMERGENCY AIR-GAP ACTIVE: Host network sockets severed. Zero-trust containment enforced.</span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[11px] bg-white text-rose-600 hover:bg-white/90 border-none font-bold px-2.5"
+              onClick={() => setLockdownOpen(true)}
+            >
+              Manage Lockdown
+            </Button>
+          </div>
+        )}
+
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
           <Outlet context={agent} />
         </main>
 
         {/* Global Autonomous AI Security Copilot */}
         <SecurityCopilot />
+
+        {/* Emergency System Lockdown & Air-Gap Modal */}
+        <EmergencyLockdownModal
+          isOpen={lockdownOpen}
+          onClose={() => setLockdownOpen(false)}
+          isLockdownActive={isLockdownActive}
+          onToggleLockdown={handleToggleLockdown}
+        />
       </div>
     </div>
   );
 }
+
