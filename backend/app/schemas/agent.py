@@ -100,3 +100,27 @@ class DeviceStatusResponse(BaseModel):
     seconds_since_heartbeat: Optional[float] = None
     websocket_clients: int = 0
     server_time: str
+
+
+class ProcessTreeNode(BaseModel):
+    id: str
+    name: str
+    pid: int
+    ppid: int
+    cmdline: str = ""
+    user: Optional[str] = None
+    cpu_percent: float = 0.0
+    memory_mb: float = 0.0
+    create_time: float = 0.0
+    status: str = "RUNNING"  # RUNNING, SUSPENDED, TERMINATED, FLAGGED
+    is_attacker: bool = False
+    mitre_techniques: List[Dict[str, str]] = []
+    evasion_flags: List[str] = []
+    sha256: Optional[str] = None
+    children: List["ProcessTreeNode"] = []
+
+
+class TerminateProcessPayload(BaseModel):
+    pid: int
+    device_id: Optional[str] = None
+    reason: Optional[str] = "Malicious process terminated via FixAI Process Tree Visualizer"

@@ -175,6 +175,27 @@ async def run_tests():
             print(f"[{total}] PASS: POST /api/v1/agent/ingest-batch -> 200 OK (synced {batch_data['syncedCount']} offline samples)")
             passed += 1
 
+            # Test 13: Improvement #3 - Process Tree & MITRE ATT&CK Mapping
+            total += 1
+            resp = await client.get("/api/v1/agent/process-tree?limit=20")
+            assert resp.status_code == 200, f"Process tree failed: {resp.status_code} - {resp.text}"
+            tree_data = resp.json()
+            assert "process_tree" in tree_data
+            assert "total_roots" in tree_data
+            print(f"[{total}] PASS: GET /api/v1/agent/process-tree -> 200 OK ({tree_data['total_roots']} root process trees, {tree_data['suspicious_count']} suspicious)")
+            passed += 1
+
+            # Test 14: Improvement #3 - Terminate Process with OS Whitelist Safety
+            total += 1
+            # Protected PID 4 must be BLOCKED with 403 Forbidden
+            resp = await client.post("/api/v1/agent/terminate-process", json={"pid": 4, "device_id": "dev-laptop-001"})
+            assert resp.status_code == 403, f"Expected 403 for protected PID 4, got: {resp.status_code}"
+            # Non-existent/mock PID 999999 should be allowed and logged safely
+            resp2 = await client.post("/api/v1/agent/terminate-process", json={"pid": 999999, "device_id": "dev-laptop-001", "reason": "Test quarantine termination"})
+            assert resp2.status_code == 200, f"Expected 200 for PID 999999, got: {resp2.status_code}"
+            print(f"[{total}] PASS: POST /api/v1/agent/terminate-process -> Protected PID 4 blocked (403), PID 999999 terminated safely")
+            passed += 1
+
             # Allow async subprocess transports to close cleanly
             await asyncio.sleep(0.2)
 

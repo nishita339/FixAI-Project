@@ -22,10 +22,12 @@ import { useAgent } from "@/hooks/use-agent-context";
 import { cn } from "@/lib/utils";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
-import { BrainCircuit, FileText, ScanSearch, Terminal, TrendingDown } from "lucide-react";
+import { BrainCircuit, FileText, GitFork, ScanSearch, ShieldAlert, Terminal, TrendingDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { CausalGraphView } from "@/components/fixai/CausalGraphView";
+import { ProcessTreeVisualizer } from "@/components/fixai/ProcessTreeVisualizer";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { CausalGraph } from "@/lib/types";
 import { fetchUnifiedIncidents } from "@/lib/history-store";
 
@@ -88,68 +90,89 @@ export default function Incidents() {
       ? [liveRow]
       : [];
 
+  const [activeTab, setActiveTab] = useState<string>("incidents");
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Incidents</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Every detection with its root-cause analysis. Click a row for the full
-          SHAP attribution and log evidence.
-        </p>
-      </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/60">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Incidents & Cyber Threat Hunting</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Real-time telemetry incidents, root-cause diagnosis, and MITRE ATT&CK process tree lineage.
+            </p>
+          </div>
+          <TabsList className="grid grid-cols-2 w-full sm:w-auto h-9">
+            <TabsTrigger value="incidents" className="gap-2 text-xs font-medium">
+              <ShieldAlert className="size-3.5" />
+              Incidents & RCA
+            </TabsTrigger>
+            <TabsTrigger value="process_tree" className="gap-2 text-xs font-medium">
+              <GitFork className="size-3.5" />
+              Process Tree & MITRE Graph
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      <Card className="shadow-soft">
-        <CardContent className="p-0">
-          {allRows.length === 0 ? (
-            <EmptyState
-              icon={ScanSearch}
-              title="No incidents recorded yet"
-              body="When the predictor flags a failure risk above threshold, the episode appears here with its full diagnosis. Try injecting a fault from the Overview or Live Monitor page."
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Detected</TableHead>
-                  <TableHead>Root cause</TableHead>
-                  <TableHead className="text-right">P(fail)</TableHead>
-                  <TableHead>Risk</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Resolution</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {allRows.map((r) => (
-                  <TableRow
-                    key={r._id}
-                    className="cursor-pointer"
-                    onClick={() => setSelected(r)}
-                  >
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      {new Date(r.detectedAt).toLocaleTimeString()}
-                    </TableCell>
-                    <TableCell className="font-medium">{r.primaryCause}</TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
-                      {(r.failureProbability * 100).toFixed(0)}%
-                    </TableCell>
-                    <TableCell>
-                      <RiskTierBadge tier={r.risk} />
-                    </TableCell>
-                    <TableCell>
-                      <IncidentStatusBadge status={r.status} />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {r.playbookName
-                        ? `${r.mode === "AUTOMATED" ? "Auto" : "Manual"} · ${r.playbookName}`
-                        : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+        <TabsContent value="incidents" className="mt-0 space-y-6">
+          <Card className="shadow-soft">
+            <CardContent className="p-0">
+              {allRows.length === 0 ? (
+                <EmptyState
+                  icon={ScanSearch}
+                  title="No incidents recorded yet"
+                  body="When the predictor flags a failure risk above threshold, the episode appears here with its full diagnosis. Try injecting a fault from the Overview or Live Monitor page."
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Detected</TableHead>
+                      <TableHead>Root cause</TableHead>
+                      <TableHead className="text-right">P(fail)</TableHead>
+                      <TableHead>Risk</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Resolution</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allRows.map((r) => (
+                      <TableRow
+                        key={r._id}
+                        className="cursor-pointer"
+                        onClick={() => setSelected(r)}
+                      >
+                        <TableCell className="text-muted-foreground tabular-nums">
+                          {new Date(r.detectedAt).toLocaleTimeString()}
+                        </TableCell>
+                        <TableCell className="font-medium">{r.primaryCause}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {(r.failureProbability * 100).toFixed(0)}%
+                        </TableCell>
+                        <TableCell>
+                          <RiskTierBadge tier={r.risk} />
+                        </TableCell>
+                        <TableCell>
+                          <IncidentStatusBadge status={r.status} />
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {r.playbookName
+                            ? `${r.mode === "AUTOMATED" ? "Auto" : "Manual"} · ${r.playbookName}`
+                            : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="process_tree" className="mt-0">
+          <ProcessTreeVisualizer />
+        </TabsContent>
+      </Tabs>
 
       {/* RCA drawer */}
       <Drawer open={selected !== null} onOpenChange={(o) => !o && setSelected(null)}>
