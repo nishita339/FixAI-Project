@@ -16,20 +16,25 @@ import {
 
 import { useAuth } from "@/hooks/use-auth";
 import {
+  AlertCircle,
   ArrowRight,
   CheckCircle2,
+  Clock,
   HeartPulse,
   Laptop,
   Loader2,
   LogOut,
   Mail,
   RadioTower,
+  RefreshCw,
+  RotateCcw,
   ShieldCheck,
   UserCheck,
   UserX,
 } from "lucide-react";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { toast } from "sonner";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -45,85 +50,186 @@ function resolveRedirectAfterAuth(
   return fallback;
 }
 
+const EMAIL_REGEX = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
+
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
-  const { isLoading: authLoading, isAuthenticated, user, activeOtp, signIn, signOut } = useAuth();
+  const {
+    isLoading: authLoading,
+    isAuthenticated,
+    user,
+    activeOtp,
+    sendOtp,
+    resendOtp,
+    verifyOtp,
+    signIn,
+    signOut,
+  } = useAuth();
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnTo = searchParams.get("returnTo");
   const redirect = resolveRedirectAfterAuth(returnTo, redirectAfterAuth);
 
-  const [step, setStep] = useState<"signIn" | { email: string }>("signIn");
+  const [step, setStep] = useState<"enterEmail" | { email: string }>("enterEmail");
+  const [emailInput, setEmailInput] = useState("");
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
-  // If user is already authenticated and came via a direct redirect from a protected page, proceed
-  // Otherwise, if they visited /auth directly, display their active session with switch/logout controls
+  // Timers for Expiration (5 min = 300s) and Resend Cooldown (45s)
+  const [expirySeconds, setExpirySeconds] = useState(300);
+  const [cooldownSeconds, setCooldownSeconds] = useState(45);
+
+  // Expiration countdown ticker
+  useEffect(() => {
+    if (typeof step === "object" && expirySeconds > 0) {
+      const timer = setInterval(() => {
+        setExpirySeconds((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [step, expirySeconds]);
+
+  // Resend cooldown ticker
+  useEffect(() => {
+    if (typeof step === "object" && cooldownSeconds > 0) {
+      const timer = setInterval(() => {
+        setCooldownSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [step, cooldownSeconds]);
+
+  // If user is already authenticated and came via an intercepted redirect from a protected page, navigate to destination
   if (!authLoading && isAuthenticated && returnTo) {
     navigate(redirect);
     return null;
   }
 
-  const handleEmailSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    try {
-      const formData = new FormData(event.currentTarget);
-      const emailStr = (formData.get("email") as string) || "";
-      await signIn("email-otp", formData);
-      setStep({ email: emailStr });
-    } catch (error) {
-      console.error("Email sign-in error:", error);
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to send verification code. Please try again.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
+  // Format seconds to mm:ss
+  const formatTime = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${mins}:${s < 10 ? "0" : ""}${s}`;
   };
 
-  const handleOtpSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  // ── Step 1: Send OTP ──────────────────────────────────────────────────
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanEmail = emailInput.trim();
+
+    if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
+    setSuccessBanner(null);
+
     try {
-      const formData = new FormData(event.currentTarget);
-      await signIn("email-otp", formData);
-      navigate(redirect);
-    } catch (error) {
-      console.error("OTP verification error:", error);
-      setError("The verification code you entered is incorrect.");
+      const result = await sendOtp(cleanEmail);
+      setSuccessBanner(result.message || "OTP sent successfully to your email.");
+      toast.success("OTP sent successfully to your email.");
+      setCooldownSeconds(result.cooldownSeconds || 45);
+      setExpirySeconds(result.expiresInSeconds || 300);
+      setStep({ email: cleanEmail });
       setOtp("");
+    } catch (err: any) {
+      console.error("Send OTP error:", err);
+      const msg = err.message || "Unable to send OTP. Please try again.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // ── Step 2: Resend OTP ────────────────────────────────────────────────
+  const handleResendOtp = async () => {
+    if (cooldownSeconds > 0 || typeof step !== "object") return;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await resendOtp(step.email);
+      setSuccessBanner("OTP sent successfully to your email.");
+      toast.success("OTP sent successfully to your email.");
+      setCooldownSeconds(result.cooldownSeconds || 45);
+      setExpirySeconds(result.expiresInSeconds || 300);
+      setOtp("");
+    } catch (err: any) {
+      console.error("Resend OTP error:", err);
+      const msg = err.message || "Unable to send OTP. Please try again.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── Step 3: Verify OTP ────────────────────────────────────────────────
+  const handleVerifyOtp = async (e?: React.FormEvent, codeToSubmit?: string) => {
+    if (e) e.preventDefault();
+    if (typeof step !== "object") return;
+
+    const submittedCode = (codeToSubmit || otp).trim();
+
+    if (!submittedCode || submittedCode.length !== 6) {
+      setError("Please enter a complete 6-digit OTP.");
+      return;
+    }
+
+    if (expirySeconds <= 0) {
+      setError("OTP expired");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await verifyOtp(step.email, submittedCode);
+      toast.success("Authentication successful! Welcome to FixAI.");
+      navigate(redirect);
+    } catch (err: any) {
+      console.error("Verify OTP error:", err);
+      const msg = err.message || "Invalid OTP";
+      setError(msg);
+      toast.error(msg);
+      if (msg === "Invalid OTP" || msg === "OTP expired") {
+        setOtp("");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Quick 1-Click Host Operator Access
   const handleHostOperatorLogin = async () => {
     setIsLoading(true);
     setError(null);
     try {
       await signIn("host-operator");
+      toast.success("Signed in as Host System Operator");
       navigate(redirect);
-    } catch (error) {
-      console.error("Host Operator login error:", error);
+    } catch (err: any) {
       setError("Failed to sign in as Host Operator.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Quick 1-Click Guest Access
   const handleGuestLogin = async () => {
     setIsLoading(true);
     setError(null);
     try {
       await signIn("anonymous");
+      toast.success("Signed in as Guest Security Analyst");
       navigate(redirect);
-    } catch (error) {
-      console.error("Guest login error:", error);
+    } catch (err: any) {
       setError("Failed to sign in as guest.");
     } finally {
       setIsLoading(false);
@@ -132,11 +238,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Auth Content */}
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="flex items-center justify-center h-full flex-col w-full max-w-md">
 
-          {/* If already signed in, show session state & switch account option */}
+          {/* If already signed in and visiting /auth directly, show active session card */}
           {isAuthenticated ? (
             <Card className="w-full border border-border/80 shadow-2xl bg-card">
               <CardHeader className="text-center pb-2">
@@ -203,15 +308,15 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             </Card>
           ) : (
             <Card className="w-full border border-border/80 shadow-2xl bg-card overflow-hidden">
-              {step === "signIn" ? (
+              {step === "enterEmail" ? (
                 <>
-                  <CardHeader className="text-center pb-4">
+                  <CardHeader className="text-center pb-3">
                     <div className="flex justify-center">
                       <button
                         type="button"
                         aria-label="FixAI home"
                         onClick={() => navigate("/")}
-                        className="mb-3 mt-2 flex size-14 cursor-pointer items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-emerald-500 to-cyan-500 text-primary-foreground shadow-md transition-transform hover:scale-105"
+                        className="mb-3 mt-1 flex size-14 cursor-pointer items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-emerald-500 to-cyan-500 text-primary-foreground shadow-md transition-transform hover:scale-105"
                       >
                         <HeartPulse className="size-7 animate-pulse" />
                       </button>
@@ -220,82 +325,89 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       Sign in to Fix<span className="text-primary">AI</span>
                     </CardTitle>
                     <CardDescription className="text-xs">
-                      Authenticate to access live telemetry and autonomous healing on this system
+                      Enter your email to receive a secure 6-digit verification OTP
                     </CardDescription>
 
                     {/* Local Machine Status Badge */}
-                    <div className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 mx-auto">
+                    <div className="mt-2.5 inline-flex items-center justify-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 mx-auto">
                       <RadioTower className="size-3 animate-pulse text-emerald-500" />
                       <span>Local Endpoint Ready (127.0.0.1:8000)</span>
                     </div>
                   </CardHeader>
 
                   <CardContent className="space-y-4">
-                    {/* Primary Option 1: Quick 1-Click Host Operator Access */}
-                    <Button
-                      type="button"
-                      className="w-full gap-2 h-10 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
-                      onClick={handleHostOperatorLogin}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <ShieldCheck className="size-4" />
-                      )}
-                      Sign In as Host System Operator
-                    </Button>
+                    {/* Email Form */}
+                    <form onSubmit={handleSendOtp} className="space-y-3">
+                      <div>
+                        <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                          Email Address
+                        </label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                          <Input
+                            name="email"
+                            placeholder="name@company.com"
+                            type="email"
+                            value={emailInput}
+                            onChange={(e) => setEmailInput(e.target.value)}
+                            className="pl-9 h-10 text-xs"
+                            disabled={isLoading}
+                            required
+                            autoFocus
+                          />
+                        </div>
+                      </div>
 
-                    <div className="relative">
+                      {error && (
+                        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-500 text-xs font-medium">
+                          <AlertCircle className="size-4 shrink-0" />
+                          <span>{error}</span>
+                        </div>
+                      )}
+
+                      <Button
+                        type="submit"
+                        className="w-full gap-2 h-10 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+                        disabled={isLoading || !emailInput.trim()}
+                      >
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="size-4 animate-spin" />
+                            Sending OTP to Email...
+                          </>
+                        ) : (
+                          <>
+                            Send OTP
+                            <ArrowRight className="size-4" />
+                          </>
+                        )}
+                      </Button>
+                    </form>
+
+                    <div className="relative my-2">
                       <div className="absolute inset-0 flex items-center">
                         <span className="w-full border-t border-border/60" />
                       </div>
                       <div className="relative flex justify-center text-[10px] uppercase font-semibold">
                         <span className="bg-card px-2 text-muted-foreground">
-                          Or sign in with email OTP
+                          Or quick access
                         </span>
                       </div>
                     </div>
 
-                    {/* Primary Option 2: Email OTP Sign In */}
-                    <form onSubmit={handleEmailSubmit}>
-                      <div className="space-y-3">
-                        <div className="relative flex items-center gap-2">
-                          <div className="relative flex-1">
-                            <Mail className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-                            <Input
-                              name="email"
-                              placeholder="operator@company.com"
-                              type="email"
-                              className="pl-9 h-10 text-xs"
-                              disabled={isLoading}
-                              required
-                            />
-                          </div>
-                          <Button
-                            type="submit"
-                            variant="secondary"
-                            className="h-10 px-3 shrink-0"
-                            disabled={isLoading}
-                          >
-                            {isLoading ? (
-                              <Loader2 className="size-4 animate-spin" />
-                            ) : (
-                              <span className="text-xs font-semibold flex items-center gap-1">
-                                Send Code <ArrowRight className="size-3.5" />
-                              </span>
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </form>
+                    {/* Quick Access Options */}
+                    <div className="space-y-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full gap-2 h-9 text-xs font-semibold"
+                        onClick={handleHostOperatorLogin}
+                        disabled={isLoading}
+                      >
+                        <ShieldCheck className="size-3.5 text-primary" />
+                        Sign In as Host System Operator
+                      </Button>
 
-                    {error && (
-                      <p className="text-xs text-rose-500 text-center font-medium">{error}</p>
-                    )}
-
-                    {/* Option 3: Guest / Analyst Login */}
-                    <div className="pt-1">
                       <Button
                         type="button"
                         variant="outline"
@@ -310,89 +422,145 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   </CardContent>
                 </>
               ) : (
+                /* ── Step 2: OTP Verification Screen ───────────────────────── */
                 <>
                   <CardHeader className="text-center pb-2">
                     <div className="flex justify-center mb-2">
-                      <div className="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                        <Mail className="size-6" />
+                      <div className="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20 shadow-xs">
+                        <Mail className="size-6 animate-pulse" />
                       </div>
                     </div>
-                    <CardTitle className="text-xl font-bold">Check your email</CardTitle>
+                    <CardTitle className="text-xl font-bold">Verify Your Email</CardTitle>
                     <CardDescription className="text-xs">
-                      Enter the 6-digit verification code sent to <strong className="text-foreground">{step.email}</strong>
+                      Enter the 6-digit code sent to <strong className="text-foreground">{step.email}</strong>
                     </CardDescription>
                   </CardHeader>
-                  <form onSubmit={handleOtpSubmit}>
-                    <CardContent className="space-y-4 pb-4">
-                      <input type="hidden" name="email" value={step.email} />
-                      <input type="hidden" name="code" value={otp} />
 
-                      {/* Instant Dev/Demo OTP Code Display with 1-click Auto-Fill */}
-                      <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
-                        <span className="text-muted-foreground text-[11px]">
-                          Verification OTP: <strong className="font-mono text-primary text-sm font-bold tracking-wider">{activeOtp || "123456"}</strong>
-                        </span>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          className="h-6 px-2 text-[10px] font-bold"
-                          onClick={() => setOtp(activeOtp || "123456")}
-                        >
-                          Auto-fill
-                        </Button>
-                      </div>
+                  <form onSubmit={handleVerifyOtp}>
+                    <CardContent className="space-y-4 pb-2">
+                      {/* Success Banner */}
+                      {successBanner && (
+                        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+                          <CheckCircle2 className="size-4 shrink-0" />
+                          <span>{successBanner}</span>
+                        </div>
+                      )}
 
+                      {/* Error Banner */}
+                      {error && (
+                        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-500 text-xs font-medium">
+                          <AlertCircle className="size-4 shrink-0" />
+                          <span>{error}</span>
+                        </div>
+                      )}
+
+                      {/* Dev / Relay OTP Banner (streamlines local development and testing) */}
+                      {activeOtp && (
+                        <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
+                          <span className="text-muted-foreground text-[11px]">
+                            Dispatched Code: <strong className="font-mono text-primary text-sm font-bold tracking-wider">{activeOtp}</strong>
+                          </span>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="h-6 px-2 text-[10px] font-bold"
+                            onClick={() => {
+                              setOtp(activeOtp);
+                              handleVerifyOtp(undefined, activeOtp);
+                            }}
+                          >
+                            Auto-fill & Verify
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* 6-Digit OTP Input Box */}
                       <div className="flex justify-center py-2">
                         <InputOTP
                           value={otp}
-                          onChange={setOtp}
-                          maxLength={6}
-                          disabled={isLoading}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && otp.length === 6 && !isLoading) {
-                              const form = (e.target as HTMLElement).closest("form");
-                              if (form) form.requestSubmit();
+                          onChange={(val) => {
+                            setOtp(val);
+                            if (val.length === 6 && !isLoading) {
+                              handleVerifyOtp(undefined, val);
                             }
                           }}
+                          maxLength={6}
+                          disabled={isLoading}
+                          autoFocus
                         >
                           <InputOTPGroup>
                             {Array.from({ length: 6 }).map((_, index) => (
-                              <InputOTPSlot key={index} index={index} />
+                              <InputOTPSlot key={index} index={index} className="size-11 text-base font-bold font-mono" />
                             ))}
                           </InputOTPGroup>
                         </InputOTP>
                       </div>
 
-                      {error && (
-                        <p className="text-xs text-rose-500 text-center font-medium">
-                          {error}
-                        </p>
-                      )}
+                      {/* Timers row: Expiration & Resend Cooldown */}
+                      <div className="flex items-center justify-between text-xs px-1 pt-1">
+                        {/* Expiration Timer */}
+                        <div className="flex items-center gap-1.5 text-muted-foreground text-[11px]">
+                          <Clock className="size-3.5 text-amber-500" />
+                          <span>
+                            {expirySeconds > 0 ? (
+                              <>Expires in: <strong className="font-mono font-semibold text-foreground">{formatTime(expirySeconds)}</strong></>
+                            ) : (
+                              <span className="text-rose-500 font-bold">OTP expired</span>
+                            )}
+                          </span>
+                        </div>
+
+                        {/* Resend OTP Button with Live Cooldown */}
+                        <div>
+                          {cooldownSeconds > 0 ? (
+                            <span className="text-[11px] text-muted-foreground font-mono">
+                              Resend in {cooldownSeconds}s
+                            </span>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-[11px] font-semibold text-primary hover:text-primary hover:bg-primary/10 gap-1"
+                              onClick={handleResendOtp}
+                              disabled={isLoading}
+                            >
+                              <RotateCcw className="size-3" />
+                              Resend OTP
+                            </Button>
+                          )}
+                        </div>
+                      </div>
                     </CardContent>
 
-                    <CardFooter className="flex-col gap-2 pt-0">
+                    <CardFooter className="flex-col gap-2 pt-2">
                       <Button
                         type="submit"
-                        className="w-full font-bold h-10"
-                        disabled={isLoading || otp.length !== 6}
+                        className="w-full font-bold h-10 gap-2"
+                        disabled={isLoading || otp.length !== 6 || expirySeconds <= 0}
                       >
                         {isLoading ? (
                           <>
-                            <Loader2 className="mr-2 size-4 animate-spin" />
-                            Verifying...
+                            <Loader2 className="size-4 animate-spin" />
+                            Verifying OTP...
                           </>
                         ) : (
                           <>
-                            Verify code & Enter Dashboard
-                            <ArrowRight className="ml-2 size-4" />
+                            Verify & Enter Dashboard
+                            <ArrowRight className="size-4" />
                           </>
                         )}
                       </Button>
+
                       <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => setStep("signIn")}
+                        onClick={() => {
+                          setStep("enterEmail");
+                          setError(null);
+                          setSuccessBanner(null);
+                        }}
                         disabled={isLoading}
                         className="w-full text-xs text-muted-foreground hover:text-foreground"
                       >

@@ -291,6 +291,61 @@ async def run_tests():
             print(f"[{total}] PASS: GET /api/v1/system/db-status -> 200 OK (Dialect: {db_status['dialect']}, Pool Ping: {db_status['ping']}, Pre-Ping: {db_status['pool_pre_ping']})")
             passed += 1
 
+            # Test 22: Email OTP - Invalid Email Format
+            total += 1
+            bad_email_resp = await client.post("/api/v1/auth/send-otp", json={"email": "invalid-not-an-email"})
+            assert bad_email_resp.status_code in (400, 422), f"Expected validation rejection, got {bad_email_resp.status_code}"
+            print(f"[{total}] PASS: POST /api/v1/auth/send-otp [Invalid Email] -> Rejected safely ({bad_email_resp.status_code})")
+            passed += 1
+
+            # Test 23: Email OTP - Successful Send
+            total += 1
+            test_email = f"audit.secops.{os.getpid()}@fixai.security"
+            send_resp = await client.post("/api/v1/auth/send-otp", json={"email": test_email})
+            assert send_resp.status_code == 200, f"Send OTP failed: {send_resp.status_code} - {send_resp.text}"
+            send_data = send_resp.json()
+            assert send_data["success"] is True
+            assert "OTP sent successfully" in send_data["message"]
+            assert send_data["cooldown_seconds"] == 45
+            assert send_data["expires_in_seconds"] == 300
+            valid_otp = send_data.get("dev_otp")
+            assert valid_otp and len(valid_otp) == 6, f"Valid OTP not generated: {valid_otp}"
+            print(f"[{total}] PASS: POST /api/v1/auth/send-otp -> 200 OK (OTP dispatched, 45s cooldown, 300s expiry)")
+            passed += 1
+
+            # Test 24: Email OTP - Cooldown Enforcement (Immediate Resend Blocked)
+            total += 1
+            cooldown_resp = await client.post("/api/v1/auth/send-otp", json={"email": test_email})
+            assert cooldown_resp.status_code == 429, f"Expected 429 on cooldown, got {cooldown_resp.status_code}"
+            assert "Please wait" in cooldown_resp.json().get("detail", "")
+            print(f"[{total}] PASS: POST /api/v1/auth/send-otp [Immediate Resend] -> 429 Cooldown Enforced")
+            passed += 1
+
+            # Test 25: Email OTP - Invalid Verification Attempt
+            total += 1
+            wrong_resp = await client.post("/api/v1/auth/verify-otp", json={"email": test_email, "otp": "000000"})
+            assert wrong_resp.status_code == 400, f"Expected 400 for bad OTP, got {wrong_resp.status_code}"
+            assert wrong_resp.json().get("detail") == "Invalid OTP"
+            print(f"[{total}] PASS: POST /api/v1/auth/verify-otp [Wrong OTP] -> 400 Bad Request ('Invalid OTP')")
+            passed += 1
+
+            # Test 26: Email OTP - Correct Verification & JWT Issuance
+            total += 1
+            verify_resp = await client.post("/api/v1/auth/verify-otp", json={"email": test_email, "otp": valid_otp})
+            assert verify_resp.status_code == 200, f"Verify OTP failed: {verify_resp.status_code} - {verify_resp.text}"
+            verify_data = verify_resp.json()
+            assert verify_data["success"] is True
+            assert "access_token" in verify_data
+            assert verify_data["user"]["email"] == test_email
+
+            # Verify issued JWT via /api/v1/auth/me
+            me_resp = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {verify_data['access_token']}"})
+            assert me_resp.status_code == 200, f"Me endpoint failed: {me_resp.status_code} - {me_resp.text}"
+            me_data = me_resp.json()
+            assert me_data["email"] == test_email
+            print(f"[{total}] PASS: POST /api/v1/auth/verify-otp -> 200 OK (Authenticated, JWT Issued, /auth/me verified)")
+            passed += 1
+
             # Allow async subprocess transports to close cleanly
             await asyncio.sleep(0.2)
 
