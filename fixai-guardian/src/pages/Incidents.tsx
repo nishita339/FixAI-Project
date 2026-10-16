@@ -21,7 +21,7 @@ import {
 import { useAgent } from "@/hooks/use-agent-context";
 import { cn } from "@/lib/utils";
 import { api } from "@/convex/_generated/api";
-import { useQuery } from "convex/react";
+import { useSafeQuery } from "@/lib/convex-safe";
 import { BrainCircuit, FileText, GitFork, ScanSearch, ShieldAlert, Terminal, TrendingDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -52,7 +52,7 @@ interface Row {
 
 export default function Incidents() {
   const agent = useAgent();
-  const convexRows = useQuery(api.history.listIncidents, { limit: 50 });
+  const convexRows = useSafeQuery(api.history.listIncidents, { limit: 50 });
   const [unifiedRows, setUnifiedRows] = useState<Row[]>([]);
   const [selected, setSelected] = useState<Row | null>(null);
   const [reportIncident, setReportIncident] = useState<Row | null>(null);

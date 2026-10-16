@@ -23,8 +23,10 @@ import type {
 } from "@/lib/types";
 import axios from "axios";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { saveLocalIncident, saveLocalAuditLog } from "@/lib/history-store";
+
+import { useSafeConvexAuth, useSafeQuery, useSafeMutation } from "@/lib/convex-safe";
+
 
 const FASTAPI_URL = (import.meta as any).env?.VITE_FASTAPI_URL || "http://localhost:8000";
 
@@ -78,10 +80,10 @@ const SPEC_MODELS = ["Dell XPS 15", "ThinkPad X1 Carbon", "MacBook Pro 14", "HP 
  * Python agent would drive; UI reads it reactively.
  */
 export function useFixAiAgent(): FixAiAgent {
-  const { isAuthenticated } = useConvexAuth();
-  const device = useQuery(api.devices.getMyDevice, isAuthenticated ? {} : "skip");
-  const ensureDevice = useMutation(api.devices.ensureDevice);
-  const ingest = useMutation(api.devices.ingestTelemetry);
+  const { isAuthenticated } = useSafeConvexAuth();
+  const device = useSafeQuery(api.devices.getMyDevice, isAuthenticated ? {} : "skip");
+  const ensureDevice = useSafeMutation(api.devices.ensureDevice);
+  const ingest = useSafeMutation(api.devices.ingestTelemetry);
 
   const [samples, setSamples] = useState<TelemetrySample[]>(() => initialSamples(45));
   const [fault, setFault] = useState<FaultKey>("none");

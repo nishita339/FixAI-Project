@@ -1,8 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { ThemeProvider } from "@/hooks/use-theme";
-import { ConvexAuthProvider } from "@convex-dev/auth/react";
-import { ConvexReactClient } from "convex/react";
 import React, { StrictMode, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
@@ -69,14 +67,31 @@ class RootErrorBoundary extends React.Component<
   }
 }
 
-const convexUrl = import.meta.env.VITE_CONVEX_URL || "https://mock.convex.cloud";
-const convex = new ConvexReactClient(convexUrl);
+import { ConvexAuthProvider } from "@convex-dev/auth/react";
+import { ConvexReactClient } from "convex/react";
+import { isConvexAvailable } from "@/lib/convex-safe";
+
+// ── Conditional Convex Provider ──────────────────────────────────────────
+// Only initialize the real Convex client when a valid deployment URL is set.
+// When running locally without a Convex deployment the fallback "mock.convex.cloud"
+// causes a fatal parse error in the Convex SDK. Instead we wrap children with
+// a no-op passthrough so the rest of the app renders normally using its local
+// offline fallbacks (localStorage auth, simulated telemetry, local history store).
+const rawConvexUrl = import.meta.env.VITE_CONVEX_URL || "";
+const convexClient = isConvexAvailable ? new ConvexReactClient(rawConvexUrl) : null;
+
+function ConvexWrapper({ children }: { children: React.ReactNode }) {
+  if (convexClient) {
+    return <ConvexAuthProvider client={convexClient}>{children}</ConvexAuthProvider>;
+  }
+  return <>{children}</>;
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <RootErrorBoundary>
       <ThemeProvider defaultTheme="dark">
-        <ConvexAuthProvider client={convex}>
+        <ConvexWrapper>
           <BrowserRouter>
             <Suspense fallback={<RouteLoading />}>
               <Routes>
@@ -116,7 +131,7 @@ createRoot(document.getElementById("root")!).render(
           </Suspense>
         </BrowserRouter>
         <Toaster />
-      </ConvexAuthProvider>
+      </ConvexWrapper>
     </ThemeProvider>
   </RootErrorBoundary>
 </StrictMode>,

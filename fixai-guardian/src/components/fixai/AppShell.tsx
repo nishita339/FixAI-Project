@@ -407,7 +407,7 @@ export default function AppShell() {
         </main>
 
         {/* Global Autonomous AI Security Copilot */}
-        <SecurityCopilot />
+        <SecurityCopilot agent={agent} />
 
         {/* Emergency System Lockdown & Air-Gap Modal */}
         <EmergencyLockdownModal

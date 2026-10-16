@@ -1,15 +1,14 @@
 import { api } from "@/convex/_generated/api";
-import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth, useQuery } from "convex/react";
+import { useSafeConvexAuth, useSafeQuery, useSafeAuthActions } from "@/lib/convex-safe";
 import { useCallback, useEffect, useState } from "react";
 
 const MOCK_USER_KEY = "fixai_mock_user";
 const MOCK_OTP_KEY = "fixai_active_otp";
 
 export function useAuth() {
-  const { isLoading: isConvexLoading, isAuthenticated: isConvexAuth } = useConvexAuth();
-  const convexUser = useQuery(api.users.currentUser);
-  const { signIn: convexSignIn, signOut: convexSignOut } = useAuthActions();
+  const { isLoading: isConvexLoading, isAuthenticated: isConvexAuth } = useSafeConvexAuth();
+  const convexUser = useSafeQuery(api.users.currentUser);
+  const { signIn: convexSignIn, signOut: convexSignOut } = useSafeAuthActions();
 
   const [localUser, setLocalUser] = useState<any>(() => {
     try {

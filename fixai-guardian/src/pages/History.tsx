@@ -14,7 +14,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
-import { useQuery } from "convex/react";
+
+import { useSafeQuery } from "@/lib/convex-safe";
+
 import {
   CheckCircle2,
   History as HistoryIcon,
@@ -36,8 +38,8 @@ import {
 import { Button } from "@/components/ui/button";
 
 export default function History() {
-  const convexIncidents = useQuery(api.history.listIncidents, { limit: 100 });
-  const convexAudit = useQuery(api.history.listAuditLogs, { limit: 100 });
+  const convexIncidents = useSafeQuery(api.history.listIncidents, { limit: 100 });
+  const convexAudit = useSafeQuery(api.history.listAuditLogs, { limit: 100 });
 
   const [incidents, setIncidents] = useState<StoredIncident[]>(() => getLocalIncidents());
   const [audit, setAudit] = useState<StoredAuditLog[]>(() => getLocalAuditLogs());

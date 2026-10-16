@@ -10,17 +10,18 @@ import { PLAYBOOKS } from "@/lib/playbooks";
 import { DEFAULT_PERMISSIONS } from "@/lib/policy";
 import { cn } from "@/lib/utils";
 import type { ActionPermission } from "@/lib/types";
-import { useMutation, useQuery } from "convex/react";
+import { useSafeMutation, useSafeQuery } from "@/lib/convex-safe";
+
 import { Info, Lock, ShieldCheck, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Permissions() {
   const { isAuthenticated } = useAuth();
-  const saved = useQuery(
+  const saved = useSafeQuery(
     api.permissions.listMyPermissions,
     isAuthenticated ? {} : "skip",
   );
-  const upsert = useMutation(api.permissions.upsertPermission);
+  const upsert = useSafeMutation(api.permissions.upsertPermission);
 
   /** Merge DB rows over defaults so the matrix always renders fully. */
   const rows: ActionPermission[] = DEFAULT_PERMISSIONS.map((def) => {

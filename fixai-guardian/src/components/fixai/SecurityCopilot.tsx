@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useAgent } from "@/hooks/use-agent-context";
+import type { FixAiAgent } from "@/hooks/use-fixai-agent";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -49,8 +49,11 @@ const DEFAULT_QUICK_PROMPTS = [
   "Which playbooks are safe to auto-execute?",
 ];
 
-export function SecurityCopilot() {
-  const agent = useAgent();
+interface SecurityCopilotProps {
+  agent?: FixAiAgent | null;
+}
+
+export function SecurityCopilot({ agent }: SecurityCopilotProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [inputMessage, setInputMessage] = useState("");
@@ -102,15 +105,15 @@ export function SecurityCopilot() {
 
     // Prepare current endpoint context
     const currentTelemetry = {
-      cpu: agent.current?.cpu ?? 22.0,
-      ram: agent.current?.ram ?? 54.0,
-      latency: agent.current?.latency ?? 14.0,
-      errorRate: agent.current?.errorRate ?? 0.0,
-      healthScore: agent.healthScore,
-      risk: agent.verdict?.risk ?? "LOW",
+      cpu: agent?.current?.cpu ?? 22.0,
+      ram: agent?.current?.ram ?? 54.0,
+      latency: agent?.current?.latency ?? 14.0,
+      errorRate: agent?.current?.errorRate ?? 0.0,
+      healthScore: agent?.healthScore ?? 95,
+      risk: agent?.verdict?.risk ?? "LOW",
     };
 
-    const incidentContext = agent.episode
+    const incidentContext = agent?.episode
       ? {
           id: agent.episode.incident.id,
           primaryCause: agent.episode.incident.rootCause.primaryCause,
@@ -166,7 +169,7 @@ export function SecurityCopilot() {
             "No active encryption tamper detected. If triggered, system initiates immediate network isolation.";
         } else if (lower.includes("health") || lower.includes("cpu") || lower.includes("ram")) {
           fallbackReply +=
-            `Current Health Score: **${agent.healthScore}%** (${agent.verdict?.risk ?? "LOW"} Risk).\n` +
+            `Current Health Score: **${agent?.healthScore ?? 95}%** (${agent?.verdict?.risk ?? "LOW"} Risk).\n` +
             `CPU: **${currentTelemetry.cpu}%** · RAM: **${currentTelemetry.ram}%** · Latency: **${currentTelemetry.latency}ms**.\n` +
             "Telemetry is within optimal operating bounds.";
         } else {
@@ -213,7 +216,7 @@ export function SecurityCopilot() {
                 </Badge>
               </span>
               <span className="text-[10px] text-muted-foreground font-mono">
-                {agent.episode ? "⚠️ Active Incident" : "● Health Nominal"}
+                {agent?.episode ? "⚠️ Active Incident" : "● Health Nominal"}
               </span>
             </div>
           </Button>
