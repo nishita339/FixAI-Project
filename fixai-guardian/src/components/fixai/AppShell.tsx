@@ -149,7 +149,7 @@ export default function AppShell() {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/");
+    navigate("/auth");
   };
 
 

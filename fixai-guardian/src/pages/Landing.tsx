@@ -68,7 +68,7 @@ const STACK = [
 ];
 
 export default function Landing() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const primaryHref = isAuthenticated ? "/dashboard" : "/auth";
   const primaryLabel = isAuthenticated ? "Open dashboard" : "Start monitoring";
@@ -102,15 +102,39 @@ export default function Landing() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-              <Link to={primaryHref}>{isAuthenticated ? "Dashboard" : "Sign in"}</Link>
-            </Button>
-            <Button asChild size="sm" className="gap-1.5">
-              <Link to={primaryHref}>
-                {primaryLabel}
-                <ArrowRight className="size-4" />
-              </Link>
-            </Button>
+            {isAuthenticated ? (
+              <>
+                <Button asChild size="sm" className="gap-1.5 font-bold">
+                  <Link to="/dashboard">
+                    Dashboard
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="hidden sm:inline-flex text-muted-foreground hover:text-foreground text-xs"
+                  onClick={async () => {
+                    await signOut();
+                    navigate("/auth");
+                  }}
+                >
+                  Sign out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button asChild variant="ghost" size="sm" className="font-semibold">
+                  <Link to="/auth">Sign in</Link>
+                </Button>
+                <Button asChild size="sm" className="gap-1.5 font-bold">
+                  <Link to="/auth">
+                    Get Started
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>

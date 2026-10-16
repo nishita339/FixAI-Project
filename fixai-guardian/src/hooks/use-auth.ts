@@ -14,19 +14,9 @@ export function useAuth() {
     try {
       const saved = localStorage.getItem(MOCK_USER_KEY);
       if (saved) return JSON.parse(saved);
-      const defaultUser = {
-        _id: "local-operator-id",
-        name: "Host System Operator",
-        email: "operator@fixai.local",
-      };
-      localStorage.setItem(MOCK_USER_KEY, JSON.stringify(defaultUser));
-      return defaultUser;
+      return null;
     } catch {
-      return {
-        _id: "local-operator-id",
-        name: "Host System Operator",
-        email: "operator@fixai.local",
-      };
+      return null;
     }
   });
 
@@ -85,12 +75,25 @@ export function useAuth() {
           err,
         );
         
-        // Complete sign-in for guest OR when OTP code is provided
-        if (provider === "anonymous" || (provider === "email-otp" && code)) {
+        // Complete sign-in for host-operator, guest, OR when OTP code is provided
+        if (provider === "host-operator" || provider === "anonymous" || (provider === "email-otp" && code)) {
           const fallbackUser = {
-            _id: "mock-user-id",
-            name: email.includes("@") ? email.split("@")[0] : "Guest Operator",
-            email: email,
+            _id: provider === "host-operator" ? "host-operator-001" : `user-${Date.now()}`,
+            name:
+              provider === "host-operator"
+                ? "Host System Operator"
+                : provider === "anonymous"
+                  ? "Guest Security Analyst"
+                  : email.includes("@")
+                    ? email.split("@")[0]
+                    : "Operator",
+            email:
+              provider === "host-operator"
+                ? "operator@fixai.local"
+                : provider === "anonymous"
+                  ? "guest@fixai.local"
+                  : email,
+            role: provider === "host-operator" ? "ADMIN" : "OPERATOR",
           };
           localStorage.setItem(MOCK_USER_KEY, JSON.stringify(fallbackUser));
           sessionStorage.removeItem(MOCK_OTP_KEY);
