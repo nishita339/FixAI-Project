@@ -253,3 +253,36 @@ async def get_current_user_endpoint(user: User = Depends(get_current_user_from_j
         "username": user.username,
         "role": user.role,
     }
+
+
+@router.get("/email-service-status")
+async def get_email_service_status():
+    """
+    GET /api/v1/auth/email-service-status
+    Returns the active email transmission channel:
+    - REAL_RESEND_API: sending real emails to user inboxes via Resend
+    - REAL_SMTP: sending real emails to user inboxes via SMTP relay
+    - LOCAL_DEV_RELAY: local development relay
+    """
+    has_resend = bool(settings.RESEND_API_KEY)
+    has_smtp = bool(settings.SMTP_HOST and (settings.SMTP_USER or settings.SMTP_PORT == 25 or settings.SMTP_PORT == 1025))
+
+    if has_resend:
+        mode = "REAL_RESEND_API"
+        details = f"Active Resend API ({settings.SMTP_FROM_EMAIL or 'onboarding@resend.dev'})"
+    elif has_smtp:
+        mode = "REAL_SMTP"
+        details = f"Active SMTP Relay ({settings.SMTP_HOST}:{settings.SMTP_PORT})"
+    else:
+        mode = "LOCAL_DEV_RELAY"
+        details = "Terminal Console Relay (Set SMTP_HOST or RESEND_API_KEY in .env for external inbox delivery)"
+
+    return {
+        "delivery_mode": mode,
+        "is_live_email": has_resend or has_smtp,
+        "details": details,
+        "smtp_host": settings.SMTP_HOST if has_smtp else None,
+        "smtp_port": settings.SMTP_PORT if has_smtp else None,
+        "smtp_from": settings.SMTP_FROM_EMAIL or None,
+    }
+

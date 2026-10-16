@@ -223,16 +223,65 @@ def _send_smtp_sync(recipient_email: str, otp_code: str, expire_minutes: int) ->
         return False, f"SMTP delivery failure: {str(exc)}"
 
 
+def _send_resend_sync(recipient_email: str, otp_code: str, expire_minutes: int) -> Tuple[bool, str]:
+    """Synchronous worker that performs email delivery via Resend HTTP REST API."""
+    import json
+    import urllib.request
+
+    url = "https://api.resend.com/emails"
+    from_email = settings.SMTP_FROM_EMAIL or "FixAI Security <onboarding@resend.dev>"
+    payload = {
+        "from": from_email,
+        "to": [recipient_email],
+        "subject": f"Your FixAI Verification Code: {otp_code}",
+        "html": _build_html_email(otp_code, expire_minutes, recipient_email),
+    }
+
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+            "Content-Type": "application/json",
+            "User-Agent": "FixAI-Security-EDR/1.0",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode())
+            logger.info("Successfully delivered OTP email to %s via Resend API (id: %s)", recipient_email, data.get("id"))
+            return True, "OTP sent successfully to your email."
+    except Exception as exc:
+        logger.error("Resend API delivery failure to %s: %s", recipient_email, str(exc))
+        return False, f"Resend delivery failure: {str(exc)}"
+
+
 async def send_otp_email(recipient_email: str, otp_code: str, expire_minutes: int = 5) -> Tuple[bool, str]:
     """
     Asynchronously delivers the 6-digit OTP code to the recipient's email address.
     
-    If SMTP credentials are provided (SMTP_HOST & SMTP_USER), executes real email transmission.
-    If running locally without external SMTP, logs the verification code prominently and
-    records it in delivery history for testing and verification.
+    1. If RESEND_API_KEY is configured: dispatches via Resend HTTP API.
+    2. If SMTP credentials are provided (SMTP_HOST & SMTP_USER): executes real SMTP email transmission.
+    3. If running locally without external SMTP/Resend: logs the verification code prominently to
+       the server console and records it in delivery history.
     """
     timestamp = datetime.now(timezone.utc).isoformat()
     
+    # Check if Resend API is configured
+    has_resend = bool(settings.RESEND_API_KEY)
+    if has_resend:
+        success, message = await asyncio.to_thread(_send_resend_sync, recipient_email, otp_code, expire_minutes)
+        _delivery_history[recipient_email.lower()] = {
+            "otp": otp_code,
+            "timestamp": timestamp,
+            "delivery_type": "RESEND_API",
+            "success": success,
+            "message": message,
+        }
+        return success, message
+
     # Check if real SMTP server is configured
     has_smtp = bool(settings.SMTP_HOST and (settings.SMTP_USER or settings.SMTP_PORT == 25 or settings.SMTP_PORT == 1025))
 
