@@ -13,6 +13,7 @@ import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
 from typing import Dict, Optional, Tuple
 from datetime import datetime, timezone
 
@@ -211,6 +212,10 @@ def _send_smtp_sync(recipient_email: str, otp_code: str, expire_minutes: int) ->
 
         if settings.SMTP_USER and settings.SMTP_PASSWORD:
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+
+        # Add standard email headers for compliance
+        msg['Date'] = formatdate(localtime=True)
+        msg['Message-ID'] = make_msgid()
 
         server.sendmail(from_email, [recipient_email], msg.as_string())
         server.quit()

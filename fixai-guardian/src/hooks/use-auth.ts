@@ -78,6 +78,9 @@ export function useAuth() {
       if (data.dev_otp) {
         sessionStorage.setItem(MOCK_OTP_KEY, data.dev_otp);
         setActiveOtp(data.dev_otp);
+      } else {
+        sessionStorage.removeItem(MOCK_OTP_KEY);
+        setActiveOtp(null);
       }
 
       return {

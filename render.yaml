@@ -1,7 +1,8 @@
 services:
+  # ── Backend: FastAPI (Python) ──────────────────────────────────────────
   - type: web
     name: fixai-backend
-    env: python
+    runtime: python
     region: oregon
     plan: free
     rootDir: backend
@@ -11,7 +12,7 @@ services:
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.9
+        value: "3.11.9"
       - key: FIXAI_ENV
         value: production
       - key: JWT_SECRET
@@ -19,8 +20,48 @@ services:
       - key: CONVEX_DEVICE_API_KEY
         generateValue: true
       - key: DEFAULT_DEVICE_KEY
-        value: fixai-device-secret-key-2026
+        generateValue: true
       - key: CORS_ORIGINS
-        value: "https://fixai-guardian.vercel.app,http://localhost:5173"
+        value: "https://fixai-guardian.vercel.app,https://fixai-frontend.onrender.com,http://localhost:5173,http://127.0.0.1:5173"
       - key: DATABASE_URL
         value: "sqlite+aiosqlite:///./fixai.db"
+      # SMTP (Gmail) – set these via Render Dashboard > Environment for security
+      # - key: SMTP_HOST
+      #   value: smtp.gmail.com
+      # - key: SMTP_PORT
+      #   value: "587"
+      # - key: SMTP_USER
+      #   value: your_email@gmail.com
+      # - key: SMTP_PASSWORD
+      #   value: your_app_password
+      # - key: SMTP_FROM_EMAIL
+      #   value: your_email@gmail.com
+      # - key: SMTP_FROM_NAME
+      #   value: "FixAI Security Guardian"
+      # - key: SMTP_TLS
+      #   value: "true"
+
+  # ── Frontend: React/Vite (Static Site) ─────────────────────────────────
+  - type: web
+    name: fixai-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    rootDir: fixai-guardian
+    buildCommand: "npm ci && npm run build"
+    staticPublishPath: dist
+    autoDeploy: true
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_FASTAPI_URL
+        value: "https://fixai-backend.onrender.com"
