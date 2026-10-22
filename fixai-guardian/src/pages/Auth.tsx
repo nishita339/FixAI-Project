@@ -1,3 +1,4 @@
+import { FASTAPI_URL } from "@/lib/api-config";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -57,7 +58,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     isLoading: authLoading,
     isAuthenticated,
     user,
-    activeOtp,
     sendOtp,
     resendOtp,
     verifyOtp,
@@ -201,6 +201,28 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       if (msg === "Invalid OTP" || msg === "OTP expired") {
         setOtp("");
       }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Local Development Helper: auto-fetch OTP from local backend if email was delayed or in spam
+  const handleAutoFillLocalOtp = async () => {
+    if (typeof step !== "object") return;
+    setIsLoading(true);
+    try {
+      // FASTAPI_URL imported from api-config
+      const res = await fetch(`${FASTAPI_URL}/api/v1/auth/local-otp?email=${encodeURIComponent(step.email)}`);
+      const data = await res.json();
+      if (res.ok && data.otp) {
+        setOtp(data.otp);
+        toast.success(`Active verification code retrieved: ${data.otp}`);
+        handleVerifyOtp(undefined, data.otp);
+      } else {
+        toast.error(data.detail || "Could not retrieve OTP from local server.");
+      }
+    } catch {
+      toast.error("Local server unreachable.");
     } finally {
       setIsLoading(false);
     }
@@ -454,26 +476,32 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         </div>
                       )}
 
-                      {/* Dev / Relay OTP Banner (streamlines local development and testing) */}
-                      {activeOtp && (
-                        <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
-                          <span className="text-muted-foreground text-[11px]">
-                            Dispatched Code: <strong className="font-mono text-primary text-sm font-bold tracking-wider">{activeOtp}</strong>
-                          </span>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="h-6 px-2 text-[10px] font-bold"
-                            onClick={() => {
-                              setOtp(activeOtp);
-                              handleVerifyOtp(undefined, activeOtp);
-                            }}
-                          >
-                            Auto-fill & Verify
-                          </Button>
+                      {/* Email Delivery Instruction Banner */}
+                      <div className="flex items-start gap-2.5 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs">
+                        <Mail className="size-4 text-primary shrink-0 mt-0.5" />
+                        <div className="space-y-1 w-full">
+                          <p className="font-semibold text-foreground">
+                            Verification code sent to your email
+                          </p>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">
+                            Sent to <strong className="text-foreground">{step.email}</strong> from <span className="font-mono text-primary text-[10px]">nishita.singh539@gmail.com</span>
+                          </p>
+                          <p className="text-[11px] text-amber-500 font-medium">
+                            ⚠️ If not visible in Inbox, please check your <strong>Spam / Junk / Promotions</strong> folder!
+                          </p>
+                          <div className="pt-1 flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={handleAutoFillLocalOtp}
+                              disabled={isLoading}
+                              className="text-[11px] text-primary hover:underline font-semibold cursor-pointer flex items-center gap-1"
+                            >
+                              <RefreshCw className="size-3 animate-spin" style={{ animationDuration: '3s' }} />
+                              Didn't get email? Auto-Fill from Local Server
+                            </button>
+                          </div>
                         </div>
-                      )}
+                      </div>
 
                       {/* 6-Digit OTP Input Box */}
                       <div className="flex justify-center py-2">

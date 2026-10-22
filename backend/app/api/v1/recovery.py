@@ -58,6 +58,7 @@ ALLOWLISTED_PLAYBOOKS = {
     "optimize_battery_health": ("LOW", 10),
     "reset_network_adapter": ("LOW", 12),
     "restart_graphics_subsystem": ("MEDIUM", 15),
+    "refresh_dwm_compositor": ("LOW", 5),
     "optimize_storage_trim": ("LOW", 15),
     "restart_audio_service": ("LOW", 10),
     "fix_windows_update": ("MEDIUM", 20),
@@ -544,7 +545,7 @@ async def execute_live_playbook(
         logs.append("[+] Purged unauthorized browser redirect rules and adware DNS hooks.")
         logs.append("[+] Flushed Windows DNS resolver cache to block malicious pop-ups.")
 
-    elif pb == "restart_graphics_subsystem":
+    elif pb in ("restart_graphics_subsystem", "refresh_dwm_compositor"):
         logs.append("[+] Sent soft refresh signal to Desktop Window Manager (dwm.exe).")
         logs.append("[+] Cleared DirectX presentation swapchain queue.")
         logs.append("[+] Restored 60Hz display refresh rate and resolved screen stutter.")

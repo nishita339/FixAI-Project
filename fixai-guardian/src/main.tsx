@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/sonner";
+import { CookieConsentBanner } from "@/components/fixai/CookieConsentBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { ThemeProvider } from "@/hooks/use-theme";
 import React, { StrictMode, lazy, Suspense } from "react";
@@ -95,45 +96,45 @@ createRoot(document.getElementById("root")!).render(
           <BrowserRouter>
             <Suspense fallback={<RouteLoading />}>
               <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route
-                path="/auth"
-                element={<AuthPage redirectAfterAuth="/dashboard" />}
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <RequireAuth>
-                    <AppShell />
-                  </RequireAuth>
-                }
-              >
-                <Route index element={<Dashboard />} />
-                <Route path="hardware" element={<LaptopDoctor />} />
-                <Route path="monitor" element={<Monitor />} />
-                <Route path="incidents" element={<Incidents />} />
-                <Route path="recovery" element={<Recovery />} />
-                <Route path="history" element={<History />} />
-                <Route path="permissions" element={<Permissions />} />
-                <Route path="fleet" element={<Fleet />} />
-              </Route>
-              {/* Demo route renders Dashboard inside AppShell without auth */}
-              <Route path="/demo" element={<AppShell />}>
-                <Route index element={<Dashboard />} />
-                <Route path="hardware" element={<LaptopDoctor />} />
-                <Route path="monitor" element={<Monitor />} />
-                <Route path="incidents" element={<Incidents />} />
-                <Route path="recovery" element={<Recovery />} />
-                <Route path="fleet" element={<Fleet />} />
-              </Route>
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-        <Toaster />
-      </ConvexWrapper>
-    </ThemeProvider>
-  </RootErrorBoundary>
-</StrictMode>,
+                <Route path="/" element={<Landing />} />
+                <Route
+                  path="/auth"
+                  element={<AuthPage redirectAfterAuth="/dashboard" />}
+                />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <RequireAuth>
+                      <AppShell />
+                    </RequireAuth>
+                  }
+                >
+                  <Route index element={<Dashboard />} />
+                  <Route path="hardware" element={<LaptopDoctor />} />
+                  <Route path="monitor" element={<Monitor />} />
+                  <Route path="incidents" element={<Incidents />} />
+                  <Route path="recovery" element={<Recovery />} />
+                  <Route path="history" element={<History />} />
+                  <Route path="permissions" element={<Permissions />} />
+                  <Route path="fleet" element={<Fleet />} />
+                </Route>
+                {/* Demo route renders Dashboard inside AppShell without auth */}
+                <Route path="/demo" element={<AppShell />}>
+                  <Route index element={<Dashboard />} />
+                  <Route path="hardware" element={<LaptopDoctor />} />
+                  <Route path="monitor" element={<Monitor />} />
+                  <Route path="incidents" element={<Incidents />} />
+                  <Route path="recovery" element={<Recovery />} />
+                  <Route path="fleet" element={<Fleet />} />
+                </Route>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+          <Toaster />
+          <CookieConsentBanner />
+        </ConvexWrapper>
+      </ThemeProvider>
+    </RootErrorBoundary>
+  </StrictMode>,
 );
-

@@ -28,7 +28,7 @@ import { saveLocalIncident, saveLocalAuditLog } from "@/lib/history-store";
 import { useSafeConvexAuth, useSafeQuery, useSafeMutation } from "@/lib/convex-safe";
 
 
-const FASTAPI_URL = (import.meta as any).env?.VITE_FASTAPI_URL || "http://localhost:8000";
+import { FASTAPI_URL, WS_URL } from "@/lib/api-config";
 
 export interface ActiveEpisode {
   incident: Incident;
@@ -114,9 +114,38 @@ export function useFixAiAgent(): FixAiAgent {
   const persistedRef = useRef(false);
   const snapshotRef = useRef<{ samples: TelemetrySample[]; fault: FaultKey } | null>(null);
 
-  // Seed sim state once.
+  // Seed initial hardware telemetry
   useEffect(() => {
-    simRef.current = { samples: initialSamples(45), fault: "none", faultProgress: 0 };
+    let cancelled = false;
+    const fetchInitial = async () => {
+      try {
+        const resp = await axios.get(`${FASTAPI_URL}/api/v1/agent/live-telemetry`, { timeout: 2000 });
+        if (!cancelled && resp.status === 200 && resp.data && resp.data.isRealHardware) {
+          const sample: TelemetrySample = {
+            t: resp.data.t || Date.now(),
+            cpu: resp.data.cpu,
+            ram: resp.data.ram,
+            latency: resp.data.latency,
+            errorRate: resp.data.errorRate,
+            disk: resp.data.disk,
+            temp: resp.data.temp ?? null,
+            battery: resp.data.battery ?? null,
+            tempAvailable: resp.data.temp_available ?? (resp.data.temp !== undefined && resp.data.temp !== null),
+            batteryAvailable: resp.data.battery_available ?? (resp.data.battery !== undefined && resp.data.battery !== null),
+            isPlugged: resp.data.isPlugged ?? resp.data.is_plugged ?? false,
+          };
+          simRef.current = { samples: [sample], fault: "none", faultProgress: 0 };
+          setSamples([sample]);
+          setHardwareOnline(true);
+        }
+      } catch {
+        if (!cancelled) {
+          simRef.current = { samples: initialSamples(45), fault: "none", faultProgress: 0 };
+        }
+      }
+    };
+    fetchInitial();
+    return () => { cancelled = true; };
   }, []);
 
   const permissions = useMemo(() => DEFAULT_PERMISSIONS, []);
@@ -130,7 +159,7 @@ export function useFixAiAgent(): FixAiAgent {
     const connectWs = () => {
       if (isCancelled) return;
       try {
-        const wsUrl = FASTAPI_URL.replace(/^http/, "ws") + "/api/v1/ws/telemetry";
+        const wsUrl = WS_URL;
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
@@ -150,13 +179,16 @@ export function useFixAiAgent(): FixAiAgent {
               setHardwareOnline(true);
               const liveSample: TelemetrySample = {
                 t: sampleData.t || Date.now(),
-                cpu: sampleData.cpu ?? 10.0,
-                ram: sampleData.ram ?? 20.0,
-                latency: sampleData.latency ?? 12.0,
+                cpu: sampleData.cpu ?? 0.0,
+                ram: sampleData.ram ?? 0.0,
+                latency: sampleData.latency ?? 0.0,
                 errorRate: sampleData.errorRate ?? 0.0,
-                disk: sampleData.disk ?? 45.0,
-                temp: sampleData.temp ?? 45.0,
-                battery: sampleData.battery ?? 100.0,
+                disk: sampleData.disk ?? 0.0,
+                temp: sampleData.temp ?? null,
+                battery: sampleData.battery ?? null,
+                tempAvailable: sampleData.temp_available ?? (sampleData.temp !== undefined && sampleData.temp !== null),
+                batteryAvailable: sampleData.battery_available ?? (sampleData.battery !== undefined && sampleData.battery !== null),
+                isPlugged: sampleData.is_plugged ?? sampleData.isPlugged ?? false,
               };
 
               simRef.current = {
@@ -196,7 +228,14 @@ export function useFixAiAgent(): FixAiAgent {
       if (ws) {
         ws.onclose = null;
         ws.onerror = null;
-        ws.close();
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        } else if (ws.readyState === WebSocket.CONNECTING) {
+          const currentWs = ws;
+          currentWs.onopen = () => {
+            try { currentWs.close(); } catch {}
+          };
+        }
       }
     };
   }, []);
@@ -208,14 +247,12 @@ export function useFixAiAgent(): FixAiAgent {
     void (async () => {
       try {
         const id = await ensureDevice({
-          name: navigator.platform
-            ? `${SPEC_MODELS[0]} · ${navigator.platform.slice(0, 12)}`
-            : SPEC_MODELS[0],
+          name: "Windows Host Workstation",
           specs: {
-            os: "Ubuntu 24.04 LTS",
-            cpuModel: "Intel Core Ultra 7 155H",
+            os: "Windows 11 Home (64-bit)",
+            cpuModel: "AMD Ryzen 7 5700U with Radeon Graphics",
             cores: 16,
-            ramGb: 32,
+            ramGb: 16,
           },
           agentOnline: true,
         });
@@ -249,8 +286,11 @@ export function useFixAiAgent(): FixAiAgent {
               latency: resp.data.latency,
               errorRate: resp.data.errorRate,
               disk: resp.data.disk,
-              temp: resp.data.temp,
-              battery: resp.data.battery,
+              temp: resp.data.temp ?? null,
+              battery: resp.data.battery ?? null,
+              tempAvailable: resp.data.temp_available ?? (resp.data.temp !== undefined && resp.data.temp !== null),
+              batteryAvailable: resp.data.battery_available ?? (resp.data.battery !== undefined && resp.data.battery !== null),
+              isPlugged: resp.data.isPlugged ?? resp.data.is_plugged ?? false,
             };
           }
         } catch {
@@ -263,8 +303,11 @@ export function useFixAiAgent(): FixAiAgent {
           ...simRef.current,
           samples: [...simRef.current.samples, liveSample].slice(-90),
         };
-      } else if (!isWsConnectedRef.current) {
+      } else if (!isLiveHardwareRef.current || faultRef.current !== "none") {
         simRef.current = nextSample({ ...simRef.current, fault: faultRef.current });
+      } else {
+        // In live hardware mode and disconnected: preserve telemetry buffer as stale without generating fabricated metrics
+        setHardwareOnline(false);
       }
 
       const buf = simRef.current.samples;

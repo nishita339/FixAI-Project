@@ -69,11 +69,11 @@ def locate_cmapss_dir(provided_path: str | None = None) -> Path:
         return Path(provided_path).resolve()
 
     candidates = [
+        Path(__file__).resolve().parents[3] / "data" / "cmapss",
         Path("data/cmapss"),
         Path("../data/cmapss"),
         Path("../../data/cmapss"),
-        Path("C:/project/FixAI/fixai1/data/cmapss"),
-        Path("C:/project/FixAI/data/cmapss"),
+        Path("../../../data/cmapss"),
         Path("data"),
         Path("../data"),
     ]

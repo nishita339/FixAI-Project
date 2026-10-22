@@ -10,6 +10,7 @@ Provides complete REST endpoints for:
 """
 
 import logging
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
@@ -124,16 +125,13 @@ async def send_otp_endpoint(req: SendOtpRequest):
             detail=message,
         )
 
-    # In development mode without production SMTP, expose dev_otp to streamlinePair-testing
-    is_prod = settings.JWT_SECRET != "fixai-super-secret-key-change-in-production"
-    dev_otp = None if is_prod else code
-
+    # OTP is strictly delivered to the user's email inbox; never leaked in API response
     return SendOtpResponse(
         success=True,
         message=message,
         cooldown_seconds=cooldown,
         expires_in_seconds=settings.OTP_EXPIRE_SECONDS,
-        dev_otp=dev_otp,
+        dev_otp=None,
     )
 
 
@@ -157,15 +155,12 @@ async def resend_otp_endpoint(req: ResendOtpRequest):
             detail=message,
         )
 
-    is_prod = settings.JWT_SECRET != "fixai-super-secret-key-change-in-production"
-    dev_otp = None if is_prod else code
-
     return SendOtpResponse(
         success=True,
         message="OTP sent successfully to your email.",
         cooldown_seconds=cooldown,
         expires_in_seconds=settings.OTP_EXPIRE_SECONDS,
-        dev_otp=dev_otp,
+        dev_otp=None,
     )
 
 
@@ -252,6 +247,28 @@ async def get_current_user_endpoint(user: User = Depends(get_current_user_from_j
         "email": user.email,
         "username": user.username,
         "role": user.role,
+    }
+
+
+@router.get("/local-otp")
+async def get_local_dev_otp(email: str):
+    """
+    GET /api/v1/auth/local-otp?email=...
+    Local development helper: returns the active 6-digit OTP for instant 1-click verification
+    when testing locally or if email delivery is delayed by spam filters.
+    In production (FIXAI_ENV=production), returns 403 Forbidden for security.
+    """
+    is_prod = os.getenv("FIXAI_ENV", "development").lower() == "production"
+    if is_prod:
+        raise HTTPException(status_code=403, detail="local-otp is disabled in production environment")
+    clean_email = email.strip().lower()
+    code = otp_manager.get_active_otp(clean_email)
+    if not code:
+        raise HTTPException(status_code=404, detail="No active OTP found for this email")
+    return {
+        "email": clean_email,
+        "otp": code,
+        "remaining_expiry_seconds": otp_manager.get_remaining_expiry(clean_email),
     }
 
 

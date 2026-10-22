@@ -17,8 +17,11 @@ export interface TelemetrySample {
   latency: number; // ms
   errorRate: number; // %
   disk: number; // %
-  temp?: number; // CPU Core Temperature in °C (Hardware)
-  battery?: number; // Laptop Battery level in % (Hardware)
+  temp?: number | null; // CPU Core Temperature in °C (Hardware)
+  battery?: number | null; // Laptop Battery level in % (Hardware)
+  tempAvailable?: boolean;
+  batteryAvailable?: boolean;
+  isPlugged?: boolean;
 }
 
 export type HealthStatus = "HEALTHY" | "DEGRADED" | "CRITICAL";

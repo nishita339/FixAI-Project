@@ -96,7 +96,7 @@ def evaluate_ai4i(model_dir: Path, data_dir: Path) -> dict:
 
     csv_path = data_dir / "ai4i2020.csv"
     if not csv_path.exists():
-        csv_path = Path("c:/project/FixAI/fixai1/data/ai4i2020.csv")
+        csv_path = Path(__file__).resolve().parent.parent.parent / "data" / "ai4i2020.csv"
     if not csv_path.exists():
         raise FileNotFoundError(f"ai4i2020.csv not found at {csv_path}")
 
@@ -242,7 +242,7 @@ def evaluate_cmapss(model_dir: Path, data_dir: Path) -> dict:
 
     c_dir = data_dir / "cmapss"
     if not c_dir.exists():
-        c_dir = Path("c:/project/FixAI/fixai1/data/cmapss")
+        c_dir = Path(__file__).resolve().parent.parent.parent / "data" / "cmapss"
 
     test_file = c_dir / "test_FD001.txt"
     rul_file = c_dir / "RUL_FD001.txt"
@@ -333,7 +333,7 @@ def evaluate_telemetry(model_dir: Path, data_dir: Path) -> dict:
 
     t_path = data_dir / "telemetry.jsonl"
     if not t_path.exists():
-        t_path = Path("c:/project/FixAI/fixai1/data/telemetry.jsonl")
+        t_path = Path(__file__).resolve().parent.parent.parent / "data" / "telemetry.jsonl"
     if not t_path.exists():
         raise FileNotFoundError(f"telemetry.jsonl not found at {t_path}")
 
@@ -411,13 +411,21 @@ def run_evaluation(
     save_json: bool = True,
 ) -> dict:
     start_t = time.time()
-    model_dir = Path(model_dir_str)
-    if not model_dir.exists():
-        model_dir = Path("c:/project/FixAI/fixai1/fixai-guardian/local_agent/models")
+    base_dir = Path(__file__).resolve().parent
+    workspace_root = base_dir.parent.parent
+    candidate_model_dirs = [
+        Path(model_dir_str),
+        base_dir / "models",
+        workspace_root / "fixai-guardian" / "local_agent" / "models",
+    ]
+    model_dir = next((d for d in candidate_model_dirs if d.exists()), base_dir / "models")
 
-    data_dir = Path(data_dir_str)
-    if not data_dir.exists():
-        data_dir = Path("c:/project/FixAI/fixai1/data")
+    candidate_data_dirs = [
+        Path(data_dir_str),
+        workspace_root / "data",
+        base_dir.parent / "data",
+    ]
+    data_dir = next((d for d in candidate_data_dirs if d.exists()), workspace_root / "data")
 
     results: Dict[str, Any] = {"timestamp": int(time.time()), "domain": domain}
 

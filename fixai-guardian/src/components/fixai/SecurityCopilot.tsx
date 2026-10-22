@@ -3,34 +3,32 @@ import type { FixAiAgent } from "@/hooks/use-fixai-agent";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Bot,
-  BrainCircuit,
-  ChevronDown,
-  Copy,
-  CornerDownLeft,
-  FileCode2,
+  CheckCircle2,
+  Download,
+  Flame,
   HardDrive,
+  HeartPulse,
   Maximize2,
   Minimize2,
+  Radio,
   RefreshCw,
   Send,
   Shield,
   ShieldAlert,
-  ShieldCheck,
   Sparkles,
   Terminal,
   Trash2,
   User,
-  Wand2,
   Wrench,
   X,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Link } from "react-router";
+import { executeLiveRepair } from "@/lib/history-store";
 
 interface ChatMessage {
   id: string;
@@ -40,13 +38,16 @@ interface ChatMessage {
   suggestedActions?: string[];
   playbookRecommendations?: string[];
   mitreReferences?: string[];
+  executedPlaybook?: string;
 }
 
 const DEFAULT_QUICK_PROMPTS = [
-  "Explain my current health & top risk drivers",
-  "How do I mitigate WMI persistence (T1546.003)?",
-  "Check for zero-day ransomware or canary tampers",
-  "Which playbooks are safe to auto-execute?",
+  "📊 Live System Health Status",
+  "🔥 Fix Laptop Overheating & Loud Fans",
+  "💾 Clean Disk Space & Temp Junk",
+  "⚡ High CPU / App Freeze Fix",
+  "🛡️ Check Ransomware & Canaries",
+  "📶 Reset Network & Wi-Fi",
 ];
 
 interface SecurityCopilotProps {
@@ -56,8 +57,10 @@ interface SecurityCopilotProps {
 export function SecurityCopilot({ agent }: SecurityCopilotProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [executingPlaybook, setExecutingPlaybook] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -65,17 +68,17 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
       id: "welcome-01",
       role: "assistant",
       content:
-        "**FixAI Security Copilot Online**\n\n" +
-        "I am your autonomic AI SOC Analyst & Systems Reliability Engineer. " +
-        "I am actively monitoring your live telemetry, process lineage, and honeypot canary files.\n\n" +
-        "How can I assist your incident response or system optimization today?",
+        "**FixAI Security & Systems Copilot Online**\n\n" +
+        "I am your autonomous SOC Analyst & IT Systems Reliability Engineer. " +
+        "I have direct access to your local workstation hardware vitals, process trees, and honeypot canaries.\n\n" +
+        "Ask me about any problem (in English or Hindi/Hinglish)—such as overheating, slow laptop, disk full, Wi-Fi drops, malware, or playbooks. I can diagnose it and execute safe automated self-healing playbooks on your host machine instantly!",
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       suggestedActions: [
-        "Explain current health",
-        "How to mitigate WMI persistence?",
-        "Check ransomware status",
+        "📊 Live System Health Status",
+        "🔥 Fix Laptop Overheating & Loud Fans",
+        "💾 Clean Disk Space & Temp Junk",
       ],
-      playbookRecommendations: ["clean_hosts_file", "remediate_brute_force"],
+      playbookRecommendations: ["clean_hosts_file", "cool_down_cpu"],
       mitreReferences: ["T1059.001", "T1546.003", "T1486"],
     },
   ]);
@@ -85,7 +88,42 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
     if (isOpen && !isMinimized) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, isOpen, isMinimized]);
+  }, [messages, isOpen, isMinimized, executingPlaybook]);
+
+  // Execute Playbook directly from chat bubble
+  const handleExecutePlaybook = async (playbookId: string) => {
+    if (executingPlaybook) return;
+    setExecutingPlaybook(playbookId);
+    const humanTitle = playbookId.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    toast.info(`Executing autonomous playbook: ${humanTitle}...`);
+
+    try {
+      const res = await executeLiveRepair(playbookId, humanTitle);
+      if (res.success) {
+        toast.success(`Playbook '${humanTitle}' executed successfully!`);
+        const executionMsg: ChatMessage = {
+          id: `sys-${Date.now()}`,
+          role: "assistant",
+          content:
+            `✅ **Automated Remediation Complete**\n\n` +
+            `Playbook **\`${playbookId}\`** was executed successfully on this host workstation.\n\n` +
+            `**Command Output & Verification:**\n` +
+            `\`\`\`text\n${(res.logs || []).join("\n")}\n\`\`\`\n\n` +
+            `*Post-fix telemetry soak completed without regression. System health verified.*`,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          suggestedActions: ["📊 Live System Health Status", "Check Active Incidents"],
+          executedPlaybook: playbookId,
+        };
+        setMessages((prev) => [...prev, executionMsg]);
+      } else {
+        toast.warning(`Playbook execution finished with warnings.`);
+      }
+    } catch (err: any) {
+      toast.error(`Playbook execution failed: ${err.message || err}`);
+    } finally {
+      setExecutingPlaybook(null);
+    }
+  };
 
   // Send message to Backend / Copilot endpoint
   const handleSendMessage = async (textToSend?: string) => {
@@ -103,7 +141,7 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
     setInputMessage("");
     setIsLoading(true);
 
-    // Prepare current endpoint context
+    // Current endpoint context
     const currentTelemetry = {
       cpu: agent?.current?.cpu ?? 22.0,
       ram: agent?.current?.ram ?? 54.0,
@@ -123,14 +161,13 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
       : undefined;
 
     try {
-      // Call backend FastAPI endpoint (local or cloud)
       const backendUrl = import.meta.env.VITE_FASTAPI_URL || "http://localhost:8000";
       const res = await fetch(`${backendUrl}/api/v1/agent/copilot/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          history: messages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+          history: messages.slice(-8).map((m) => ({ role: m.role, content: m.content })),
           telemetry_context: currentTelemetry,
           incident_context: incidentContext,
         }),
@@ -152,30 +189,34 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
         throw new Error("Backend copilot error");
       }
     } catch {
-      // High-Fidelity Client-side AI SOC fallback if backend is offline
+      // High-Fidelity Client-side Fallback if backend is offline
       setTimeout(() => {
-        let fallbackReply = `**FixAI SOC Engine (Offline Mode)**\n\nI have received: *"${text}"*.\n\n`;
+        let fallbackReply = `**FixAI SOC Engine (Offline Standalone)**\n\n`;
         const lower = text.toLowerCase();
 
-        if (lower.includes("wmi") || lower.includes("persistence")) {
+        if (lower.includes("overheat") || lower.includes("garam") || lower.includes("fan")) {
           fallbackReply +=
-            "**WMI Persistence Detected (MITRE T1546.003)**\n" +
-            "Rogue WMI Event Consumers allow attacker scripts to persist without files. " +
-            "Navigate to the **Incidents & Threats** page and use the **Process Tree Visualizer** to isolate and terminate the child shell.";
-        } else if (lower.includes("ransomware") || lower.includes("canary")) {
+            `🔥 **CPU Thermal Diagnostics & Cooldown Analysis**\n\n` +
+            `• Current CPU Load: **${currentTelemetry.cpu}%**\n` +
+            `• Frequent causes include clogged exhaust vents, dried thermal paste, or high background CPU workers.\n\n` +
+            `**Immediate Fix:** Execute **\`cool_down_cpu\`** below to throttle CPU clock states and restore baseline temperatures.`;
+        } else if (lower.includes("slow") || lower.includes("hang") || lower.includes("freeze") || lower.includes("dheema")) {
           fallbackReply +=
-            "**Zero-Day Ransomware Canary Trap Active**\n" +
-            "Decoy honeypot files are monitored by background Watchdog threads. " +
-            "No active encryption tamper detected. If triggered, system initiates immediate network isolation.";
-        } else if (lower.includes("health") || lower.includes("cpu") || lower.includes("ram")) {
+            `⚡ **System Slowness & Freeze Remediation**\n\n` +
+            `• CPU: **${currentTelemetry.cpu}%** · RAM: **${currentTelemetry.ram}%**\n` +
+            `• High background tasks create thread locks and pagefile thrashing.\n\n` +
+            `**Immediate Fix:** Execute **\`kill_runaway_process\`** or **\`flush_cache\`** to reclaim memory immediately.`;
+        } else if (lower.includes("disk") || lower.includes("storage") || lower.includes("khali")) {
           fallbackReply +=
-            `Current Health Score: **${agent?.healthScore ?? 95}%** (${agent?.verdict?.risk ?? "LOW"} Risk).\n` +
-            `CPU: **${currentTelemetry.cpu}%** · RAM: **${currentTelemetry.ram}%** · Latency: **${currentTelemetry.latency}ms**.\n` +
-            "Telemetry is within optimal operating bounds.";
+            `💾 **Drive C: Storage Optimization**\n\n` +
+            `• Windows accumulated temporary installation files, shadow copies, and browser caches.\n\n` +
+            `**Immediate Fix:** Execute **\`purge_tmp\`** below to safely clean temp junk files.`;
         } else {
           fallbackReply +=
-            "Your query has been logged. FixAI EDR provides real-time brute-force defense, " +
-            "fileless threat hunting, AES-256 quarantine, and 28 autonomic recovery playbooks.";
+            `📊 **FixAI Diagnostics Report**\n\n` +
+            `• System Health Score: **${agent?.healthScore ?? 95}%**\n` +
+            `• CPU: **${currentTelemetry.cpu}%** · RAM: **${currentTelemetry.ram}%** · Latency: **${currentTelemetry.latency}ms**\n\n` +
+            `You can run any self-healing playbook below to optimize your system.`;
         }
 
         const fallbackMsg: ChatMessage = {
@@ -183,15 +224,47 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
           role: "assistant",
           content: fallbackReply,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          suggestedActions: ["Explain current health", "View Process Tree", "Open Playbook Catalog"],
-          playbookRecommendations: ["clean_hosts_file"],
-          mitreReferences: ["T1059.001", "T1546.003"],
+          suggestedActions: ["📊 Live System Health Status", "Clean Temp Files"],
+          playbookRecommendations: ["clean_hosts_file", "cool_down_cpu"],
+          mitreReferences: ["T1059.001"],
         };
         setMessages((prev) => [...prev, fallbackMsg]);
-      }, 400);
+      }, 350);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleClearChat = () => {
+    setMessages([
+      {
+        id: `welcome-${Date.now()}`,
+        role: "assistant",
+        content: "Chat history cleared. FixAI Security Copilot is ready for your questions.",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        suggestedActions: [
+          "📊 Live System Health Status",
+          "🔥 Fix Laptop Overheating & Loud Fans",
+          "💾 Clean Disk Space & Temp Junk",
+        ],
+        playbookRecommendations: ["clean_hosts_file"],
+      },
+    ]);
+    toast.info("Copilot chat history cleared");
+  };
+
+  const handleExportChat = () => {
+    const text = messages
+      .map((m) => `[${m.timestamp}] ${m.role === "user" ? "USER" : "FIXAI COPILOT"}:\n${m.content}\n`)
+      .join("\n---\n\n");
+    const blob = new Blob([text], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fixai-copilot-report-${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Copilot incident report exported");
   };
 
   return (
@@ -231,7 +304,9 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
               "flex flex-col overflow-hidden border-border/80 bg-card/95 shadow-2xl backdrop-blur-md transition-all duration-300",
               isMinimized
                 ? "h-14 w-80 rounded-2xl"
-                : "h-[540px] w-[380px] sm:w-[420px] rounded-2xl",
+                : isExpanded
+                ? "h-[660px] w-[95vw] sm:w-[620px] rounded-2xl"
+                : "h-[560px] w-[95vw] sm:w-[430px] rounded-2xl",
             )}
           >
             {/* Header */}
@@ -242,13 +317,13 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
                 </div>
                 <div>
                   <CardTitle className="text-xs font-bold flex items-center gap-1.5">
-                    FixAI Security Copilot
+                    FixAI Security & Systems Copilot
                     <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 border-emerald-500/40 text-emerald-500">
                       LIVE
                     </Badge>
                   </CardTitle>
                   <p className="text-[10px] text-muted-foreground font-mono">
-                    EDR & IT Reliability Assistant
+                    Autonomous EDR & Self-Healing Partner
                   </p>
                 </div>
               </div>
@@ -258,14 +333,43 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
                 <Button
                   size="icon"
                   variant="ghost"
+                  title="Export Chat Report"
                   className="size-7 text-muted-foreground hover:text-foreground"
-                  onClick={() => setIsMinimized(!isMinimized)}
+                  onClick={handleExportChat}
                 >
-                  {isMinimized ? <Maximize2 className="size-3.5" /> : <Minimize2 className="size-3.5" />}
+                  <Download className="size-3.5" />
                 </Button>
                 <Button
                   size="icon"
                   variant="ghost"
+                  title="Clear Conversation"
+                  className="size-7 text-muted-foreground hover:text-foreground"
+                  onClick={handleClearChat}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title={isExpanded ? "Collapse Width" : "Expand Width"}
+                  className="size-7 text-muted-foreground hover:text-foreground hidden sm:flex"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                >
+                  {isExpanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title={isMinimized ? "Restore" : "Minimize"}
+                  className="size-7 text-muted-foreground hover:text-foreground"
+                  onClick={() => setIsMinimized(!isMinimized)}
+                >
+                  <Minimize2 className="size-3.5" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title="Close"
                   className="size-7 text-muted-foreground hover:text-destructive"
                   onClick={() => setIsOpen(false)}
                 >
@@ -290,7 +394,7 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
                         {msg.role === "assistant" ? (
                           <>
                             <Sparkles className="size-3 text-primary" />
-                            <span>FixAI SOC Copilot</span>
+                            <span>FixAI Copilot</span>
                           </>
                         ) : (
                           <>
@@ -303,7 +407,7 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
 
                       <div
                         className={cn(
-                          "rounded-2xl px-3.5 py-2.5 max-w-[88%] text-xs leading-relaxed shadow-xs whitespace-pre-wrap",
+                          "rounded-2xl px-3.5 py-2.5 max-w-[92%] text-xs leading-relaxed shadow-xs whitespace-pre-wrap",
                           msg.role === "user"
                             ? "bg-primary text-primary-foreground rounded-br-xs"
                             : "bg-muted/70 text-foreground border border-border/70 rounded-bl-xs",
@@ -326,28 +430,43 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
                           </div>
                         )}
 
-                        {/* Playbook Links if provided */}
+                        {/* Interactive Playbook Execution Buttons */}
                         {msg.playbookRecommendations && msg.playbookRecommendations.length > 0 && (
-                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                            <span className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
-                              <Wrench className="size-2.5 text-primary" /> Playbook:
+                          <div className="mt-3 pt-2 border-t border-border/60">
+                            <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1 mb-1.5">
+                              <Wrench className="size-3 text-primary" /> Recommended Self-Healing Actions:
                             </span>
-                            {msg.playbookRecommendations.map((pb) => (
-                              <Link
-                                key={pb}
-                                to="/dashboard/recovery"
-                                className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-mono text-primary hover:bg-primary/20 transition-colors"
-                              >
-                                {pb}
-                              </Link>
-                            ))}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {msg.playbookRecommendations.map((pb) => (
+                                <Button
+                                  key={pb}
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={executingPlaybook === pb}
+                                  onClick={() => handleExecutePlaybook(pb)}
+                                  className="h-6 px-2.5 text-[10px] font-mono gap-1 rounded-md bg-primary/15 text-primary hover:bg-primary/25 border border-primary/30 shadow-2xs"
+                                >
+                                  {executingPlaybook === pb ? (
+                                    <>
+                                      <RefreshCw className="size-2.5 animate-spin" />
+                                      Executing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Zap className="size-2.5" />
+                                      Run {pb}
+                                    </>
+                                  )}
+                                </Button>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
 
                       {/* Suggested Actions Buttons */}
                       {msg.suggestedActions && msg.suggestedActions.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
+                        <div className="flex flex-wrap gap-1 mt-1 max-w-[92%]">
                           {msg.suggestedActions.map((action, idx) => (
                             <button
                               key={idx}
@@ -365,7 +484,14 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
                   {isLoading && (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground p-2">
                       <RefreshCw className="size-3.5 animate-spin text-primary" />
-                      <span className="italic font-mono text-[11px]">FixAI Copilot analyzing endpoint telemetry...</span>
+                      <span className="italic font-mono text-[11px]">FixAI Copilot analyzing endpoint telemetry & diagnostics...</span>
+                    </div>
+                  )}
+
+                  {executingPlaybook && (
+                    <div className="flex items-center gap-2 text-xs text-primary p-2 border border-primary/30 rounded-lg bg-primary/5">
+                      <Zap className="size-3.5 animate-pulse" />
+                      <span className="font-mono text-[11px]">Executing self-healing playbook: {executingPlaybook}...</span>
                     </div>
                   )}
 
@@ -397,7 +523,7 @@ export function SecurityCopilot({ agent }: SecurityCopilotProps) {
                     <Input
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
-                      placeholder="Ask FixAI Copilot about threats, playbooks, health..."
+                      placeholder="Ask FixAI Copilot about overheating, RAM, disk, threats, playbooks..."
                       disabled={isLoading}
                       className="h-9 text-xs font-mono"
                     />

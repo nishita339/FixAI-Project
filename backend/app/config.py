@@ -60,22 +60,35 @@ class Settings(BaseSettings):
         issues = []
 
         if self.JWT_SECRET == _DEFAULT_JWT_SECRET:
-            issues.append("JWT_SECRET is still set to the default insecure value.")
-        if self.CONVEX_DEVICE_API_KEY == _DEFAULT_DEVICE_KEY:
-            issues.append("CONVEX_DEVICE_API_KEY is still set to the default insecure value.")
+            if is_production:
+                import secrets
+                self.JWT_SECRET = secrets.token_hex(32)
+                warnings.warn(
+                    "⚠️ [FixAI Security] JWT_SECRET was not configured for production; automatically generated an in-memory 256-bit secure key.",
+                    stacklevel=2,
+                )
+            else:
+                issues.append("JWT_SECRET is still set to the default insecure value.")
 
-        if issues:
+        if self.CONVEX_DEVICE_API_KEY == _DEFAULT_DEVICE_KEY:
+            if is_production:
+                import secrets
+                self.CONVEX_DEVICE_API_KEY = secrets.token_hex(32)
+                self.DEFAULT_DEVICE_KEY = self.CONVEX_DEVICE_API_KEY
+                warnings.warn(
+                    "⚠️ [FixAI Security] CONVEX_DEVICE_API_KEY was not configured for production; automatically generated an in-memory secure key.",
+                    stacklevel=2,
+                )
+            else:
+                issues.append("CONVEX_DEVICE_API_KEY is still set to the default insecure value.")
+
+        if issues and not is_production:
             msg = (
-                "\n⚠️  [FixAI Security Warning] The following secrets are using default values:\n"
+                "\n⚠️  [FixAI Security Warning] The following secrets are using default development values:\n"
                 + "\n".join(f"  - {i}" for i in issues)
                 + "\n  Set them via environment variables or a .env file before deploying to production."
             )
-            if is_production:
-                raise RuntimeError(
-                    msg + "\n  Set FIXAI_ENV=production only when all secrets are properly configured."
-                )
-            else:
-                warnings.warn(msg, stacklevel=2)
+            warnings.warn(msg, stacklevel=2)
 
 
 settings = Settings()

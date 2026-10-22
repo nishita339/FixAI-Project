@@ -18,7 +18,7 @@ Design Principles:
 
 Requirements:
   - osquery installed: https://osquery.io/downloads/official/
-  - osqueryi accessible in PATH (Windows: C:\Program Files\osquery\osqueryi.exe)
+  - osqueryi accessible in PATH (Windows: C:\\Program Files\\osquery\\osqueryi.exe)
   - Python: No pip install needed — uses subprocess to call osqueryi JSON output
 
 Usage:

@@ -104,29 +104,29 @@ export interface SimState {
 export function nextSample(state: SimState): SimState {
   const last = state.samples[state.samples.length - 1] ?? {
     t: Date.now(),
-    cpu: 24,
-    ram: 42,
-    latency: 110,
-    errorRate: 0.2,
-    disk: 38,
-    temp: 48,
-    battery: 88,
+    cpu: 18,
+    ram: 84.6,
+    latency: 15,
+    errorRate: 0.0,
+    disk: 95.6,
+    temp: null,
+    battery: 69,
   };
 
-  let cpu = clamp(jitter(last.cpu, 6), 3, 99);
-  let ram = clamp(jitter(last.ram, 3), 10, 99);
-  let latency = clamp(jitter(last.latency, 30), 40, 6000);
-  let errorRate = clamp(jitter(last.errorRate, 0.6), 0, 60);
-  let disk = clamp(jitter(last.disk, 0.4), 5, 99.5);
-  let temp = clamp(jitter(last.temp ?? 48, 1.5), 38, 99);
-  let battery = clamp(jitter(last.battery ?? 88, 0.2), 5, 100);
+  let cpu = clamp(jitter(last.cpu, 4), 3, 99);
+  let ram = clamp(jitter(last.ram, 1), 10, 99);
+  let latency = clamp(jitter(last.latency, 5), 1, 6000);
+  let errorRate = clamp(jitter(last.errorRate, 0.1), 0, 60);
+  let disk = clamp(jitter(last.disk, 0.1), 5, 99.5);
+  let temp = last.temp != null ? clamp(jitter(last.temp, 1.0), 30, 99) : null;
+  let battery = last.battery != null ? clamp(last.battery, 5, 100) : 69;
   let progress = state.faultProgress;
 
   switch (state.fault) {
     case "cpu_spike":
       cpu = clamp(last.cpu + 7 + Math.random() * 6, 20, 97);
       latency = clamp(last.latency + 220, 80, 5200);
-      temp = clamp(temp + 2.5, 45, 88);
+      temp = clamp((temp ?? 48) + 2.5, 45, 88);
       break;
     case "memory_leak":
       ram = clamp(last.ram + 4.5 + Math.random() * 3, 20, 96);
@@ -150,7 +150,7 @@ export function nextSample(state: SimState): SimState {
       cpu = clamp(last.cpu + 2, 10, 85);
       break;
     case "thermal_throttling":
-      temp = clamp(temp + 5.5 + Math.random() * 3, 50, 98.5);
+      temp = clamp((temp ?? 48) + 5.5 + Math.random() * 3, 50, 98.5);
       cpu = clamp(last.cpu + 6.8, 30, 96);
       latency = clamp(last.latency + 160, 80, 3800);
       break;
@@ -171,14 +171,14 @@ export function nextSample(state: SimState): SimState {
       latency = clamp(last.latency + 240, 80, 3900);
       break;
     case "none":
-      // Gentle pull back toward a healthy baseline.
-      cpu += (24 - cpu) * 0.18;
-      ram += (42 - ram) * 0.18;
-      latency += (110 - latency) * 0.18;
-      errorRate += (0.3 - errorRate) * 0.3;
-      disk += (38 - disk) * 0.12;
-      temp += (48 - temp) * 0.20;
-      battery += (88 - battery) * 0.05;
+      // Maintain stable real host hardware levels without synthetic deviation
+      cpu += (Math.max(5, Math.min(50, last.cpu)) - cpu) * 0.15;
+      ram += (last.ram - ram) * 0.10;
+      latency += (Math.max(1, Math.min(100, last.latency)) - latency) * 0.15;
+      errorRate += (0.0 - errorRate) * 0.3;
+      disk += (last.disk - disk) * 0.05;
+      if (last.temp != null) temp = last.temp;
+      if (last.battery != null) battery = last.battery;
       break;
   }
 
@@ -189,7 +189,7 @@ export function nextSample(state: SimState): SimState {
     latency: clamp(latency, 40, 6000),
     errorRate: clamp(errorRate, 0, 60),
     disk: clamp(disk, 5, 99.5),
-    temp: clamp(temp, 35, 105),
+    temp: temp != null ? clamp(temp, 35, 105) : null,
     battery: clamp(battery, 2, 100),
   };
 
@@ -205,11 +205,11 @@ export function nextSample(state: SimState): SimState {
  */
 export function computeAnomalyScore(s: TelemetrySample): number {
   const deviations = [
-    (s.cpu - 45) / 45,
-    (s.ram - 55) / 45,
-    (s.latency - 300) / 1500,
-    (s.errorRate - 2) / 12,
-    (s.disk - 60) / 40,
+    (s.cpu - 70) / 30,
+    (s.ram - 80) / 20,
+    (s.latency - 600) / 1500,
+    (s.errorRate - 5) / 15,
+    (s.disk - 85) / 15,
   ];
   const stress = deviations.reduce(
     (acc, d) => acc + Math.max(0, d) ** 1.5,
@@ -221,11 +221,11 @@ export function computeAnomalyScore(s: TelemetrySample): number {
 /** XGBoost stand-in: composite logistic risk over the 5-minute lead window. */
 export function predictFailure(s: TelemetrySample): number {
   const z =
-    0.055 * (s.cpu - 45) +
-    0.07 * (s.ram - 55) +
-    0.0022 * (s.latency - 300) +
-    0.09 * (s.errorRate - 2) +
-    0.045 * (s.disk - 60);
+    0.05 * (s.cpu - 70) +
+    0.06 * (s.ram - 80) +
+    0.0015 * (s.latency - 600) +
+    0.08 * (s.errorRate - 5) +
+    0.04 * (s.disk - 85);
   return clamp(sigmoid(z), 0.004, 0.996);
 }
 
@@ -312,13 +312,16 @@ export function deriveVerdict(s: TelemetrySample): AiVerdict {
 }
 
 export function healthScoreFrom(s: TelemetrySample, risk: number): number {
-  const metricHealth =
-    (100 - s.cpu) * 0.2 +
-    (100 - s.ram) * 0.2 +
-    (100 - clamp(s.latency / 60, 0, 100)) * 0.25 +
-    (100 - clamp(s.errorRate * 8, 0, 100)) * 0.25 +
-    (100 - s.disk) * 0.1;
-  return Math.round(clamp(metricHealth * 0.75 + (1 - risk) * 100 * 0.25, 0, 100));
+  const cpuPenalty = s.cpu > 65 ? (s.cpu - 65) * 1.2 : 0;
+  const ramPenalty = s.ram > 80 ? (s.ram - 80) * 1.5 : 0;
+  const latPenalty = s.latency > 500 ? clamp((s.latency - 500) / 40, 0, 30) : 0;
+  const errPenalty = s.errorRate > 2 ? clamp(s.errorRate * 4, 0, 35) : 0;
+  const diskPenalty = s.disk > 85 ? (s.disk - 85) * 1.5 : 0;
+
+  const penalty = cpuPenalty + ramPenalty + latPenalty + errPenalty + diskPenalty;
+  const metricHealth = clamp(100 - penalty, 10, 100);
+  const pPenalty = (1 - risk) * 100;
+  return Math.round(clamp(metricHealth * 0.6 + pPenalty * 0.4, 5, 99));
 }
 
 export function statusFromScore(score: number): "HEALTHY" | "DEGRADED" | "CRITICAL" {
@@ -656,7 +659,7 @@ export function initialSamples(count = 45): TelemetrySample[] {
   return state.samples;
 }
 
-/** Baseline snapshot used for pre/post-fix comparison. */
+/** Baseline snapshot used for pre/post-fix comparison matching real host workstation. */
 export function baselineSample(): TelemetrySample {
-  return { t: Date.now(), cpu: 24, ram: 42, latency: 110, errorRate: 0.3, disk: 38, temp: 48, battery: 88 };
+  return { t: Date.now(), cpu: 18, ram: 84.6, latency: 15, errorRate: 0.0, disk: 95.6, temp: null, battery: 69 };
 }

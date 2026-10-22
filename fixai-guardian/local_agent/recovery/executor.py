@@ -89,6 +89,7 @@ ALLOWED_PLAYBOOKS = {
     "optimize_battery_health": "Engage system battery saver profile and throttle power-draining background tasks",
     "reset_network_adapter": "Flush DNS resolver cache and reset network interface stack",
     "restart_graphics_subsystem": "Recycle Desktop Window Manager (DWM) and restart display driver pipeline",
+    "refresh_dwm_compositor": "Soft reload Desktop Window Manager (dwm.exe) and clear DirectX swapchain buffer",
     "optimize_storage_trim": "Execute filesystem storage TRIM and cleanup temporary error crash dumps",
     # ── EDR & Cybersecurity Self-Healing Playbooks ──
     "quarantine_threat_payload": "Isolate process, verify SHA-256 against OS core whitelist, and move file to AES-256 encrypted vault",
@@ -275,7 +276,7 @@ class RecoveryManager:
                 result = self._action_optimize_battery_health(params)
             elif normalized_name == "reset_network_adapter":
                 result = self._action_reset_network_adapter(params)
-            elif normalized_name == "restart_graphics_subsystem":
+            elif normalized_name in ("restart_graphics_subsystem", "refresh_dwm_compositor"):
                 result = self._action_restart_graphics_subsystem(params)
             elif normalized_name == "optimize_storage_trim":
                 result = self._action_optimize_storage_trim(params)

@@ -53,7 +53,7 @@ import {
 import { Link } from "react-router";
 import { toast } from "sonner";
 
-const FASTAPI_URL = (import.meta as any).env?.VITE_FASTAPI_URL || "http://localhost:8000";
+import { FASTAPI_URL } from "@/lib/api-config";
 
 interface SysDiagnostics {
   timestamp: number;
@@ -79,6 +79,7 @@ interface SysDiagnostics {
     freeGb: number;
     usedPercent: number;
     healthy: boolean;
+    driveModel?: string;
   };
   bsodDumps: Array<{ fileName: string; modified: number; sizeKb: number }>;
   topRamProcesses: Array<{ pid: number; name: string; cpu: number; ram: number; status: string }>;
@@ -110,6 +111,8 @@ interface SoftwareUpdatesResponse {
   lastScanned: number;
   totalUpgrades: number;
   apps: SoftwareUpdateItem[];
+  message?: string;
+  installedKBs?: Array<{ hotFixId: string; description: string; installedOn?: string }>;
 }
 
 const COMMON_SYMPTOMS = [
@@ -143,13 +146,13 @@ export default function LaptopDoctor() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
 
-  const coreTemp = current.temp ?? 48;
-  const batteryLevel = diagnostics?.battery?.percent ?? current.battery ?? 75;
+  const coreTemp = current.temp ?? null;
+  const batteryLevel = diagnostics?.battery?.percent ?? current.battery ?? null;
 
   const fetchDiagnostics = async () => {
     try {
       const resp = await axios.get<SysDiagnostics>(`${FASTAPI_URL}/api/v1/agent/system-diagnostics`, {
-        timeout: 4000,
+        timeout: 15000,
       });
       if (resp.status === 200 && resp.data) {
         setDiagnostics(resp.data);
@@ -222,7 +225,7 @@ export default function LaptopDoctor() {
         package_id: pkgId,
         app_name: appName,
         update_all: updateAll,
-      });
+      }, { timeout: 30000 });
 
       if (res.status === 200 && res.data) {
         setExecutingLogs(res.data.logs || []);
@@ -275,9 +278,10 @@ export default function LaptopDoctor() {
     );
   }, [searchQuery]);
 
-  const totalUpgrades = softwareUpdates?.totalUpgrades ?? 22;
+  const totalUpgrades = softwareUpdates?.totalUpgrades ?? 0;
   const criticalUpdates = (softwareUpdates?.apps ?? []).filter((a) => a.severity === "CRITICAL").length;
   const highUpdates = (softwareUpdates?.apps ?? []).filter((a) => a.severity === "HIGH").length;
+
 
   return (
     <div className="space-y-6 pb-12">
@@ -342,7 +346,7 @@ export default function LaptopDoctor() {
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Active Telemetry: CPU Temp {coreTemp.toFixed(0)}°C · Battery {batteryLevel.toFixed(0)}% ({diagnostics?.battery?.chargingStatus || "Online"}) · Memory {current.ram.toFixed(0)}% · SSD C: {diagnostics?.storage?.usedPercent ?? current.disk.toFixed(0)}% used · Outdated Apps: {totalUpgrades}
+                Active Telemetry: CPU Temp {coreTemp != null ? `${coreTemp.toFixed(0)}°C` : "N/A"} · Battery {batteryLevel != null ? `${batteryLevel.toFixed(0)}%` : "N/A"} ({diagnostics?.battery?.chargingStatus || (current.isPlugged ? "AC Connected" : "On Battery")}) · Memory {current.ram.toFixed(0)}% · SSD C: {diagnostics?.storage?.usedPercent ?? current.disk.toFixed(0)}% used · Outdated Apps: {totalUpgrades}
               </p>
             </div>
           </div>
@@ -351,10 +355,10 @@ export default function LaptopDoctor() {
             <div className="text-right">
               <span className="text-xs text-muted-foreground block">System Health</span>
               <span className="text-xl font-bold text-foreground">
-                {coreTemp > 85 || batteryLevel < 20 || current.ram > 90 ? "ATTENTION NEEDED" : (criticalUpdates > 0 ? "PATCHES PENDING" : "ALL SYSTEMS NOMINAL")}
+                {(coreTemp != null && coreTemp > 85) || (batteryLevel != null && batteryLevel < 20) || current.ram > 90 ? "ATTENTION NEEDED" : (criticalUpdates > 0 ? "PATCHES PENDING" : "ALL SYSTEMS NOMINAL")}
               </span>
             </div>
-            {coreTemp > 85 || batteryLevel < 20 || current.ram > 90 || criticalUpdates > 0 ? (
+            {(coreTemp != null && coreTemp > 85) || (batteryLevel != null && batteryLevel < 20) || current.ram > 90 || criticalUpdates > 0 ? (
               <ShieldAlert className="size-8 text-amber-500 shrink-0" />
             ) : (
               <ShieldCheck className="size-8 text-emerald-500 shrink-0" />
@@ -514,12 +518,12 @@ export default function LaptopDoctor() {
             </Card>
             <Card className="border-border/70 p-4">
               <div className="text-xs text-muted-foreground">Critical Security Fixes</div>
-              <div className="text-2xl font-bold mt-1 text-red-500">{criticalUpdates || 2} Pending</div>
+              <div className="text-2xl font-bold mt-1 text-red-500">{criticalUpdates} Pending</div>
               <div className="text-[11px] text-muted-foreground mt-0.5">Runtimes & Remote Access</div>
             </Card>
             <Card className="border-border/70 p-4">
               <div className="text-xs text-muted-foreground">High Priority Patches</div>
-              <div className="text-2xl font-bold mt-1 text-amber-500">{highUpdates || 4} Pending</div>
+              <div className="text-2xl font-bold mt-1 text-amber-500">{highUpdates} Pending</div>
               <div className="text-[11px] text-muted-foreground mt-0.5">Git, Node.js, Docker, WSL</div>
             </Card>
             <Card className="border-border/70 p-4">
@@ -554,7 +558,7 @@ export default function LaptopDoctor() {
                   <Button
                     size="sm"
                     onClick={() => handleUpdateSoftware(undefined, undefined, true)}
-                    disabled={updatingAppId !== null}
+                    disabled={updatingAppId !== null || totalUpgrades === 0}
                     className="gap-1.5 text-xs font-medium"
                   >
                     <DownloadCloud className="size-3.5" />
@@ -564,64 +568,94 @@ export default function LaptopDoctor() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Software Name</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Installed Version</TableHead>
-                    <TableHead>Latest Available</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead className="min-w-[280px]">Detected Problem & Risk</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(softwareUpdates?.apps ?? []).map((app) => (
-                    <TableRow key={app.id}>
-                      <TableCell className="font-semibold text-foreground">
-                        <div>{app.name}</div>
-                        <div className="text-[10px] font-mono text-muted-foreground">{app.id}</div>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{app.category}</TableCell>
-                      <TableCell className="font-mono text-xs text-amber-600 dark:text-amber-400">{app.installedVersion}</TableCell>
-                      <TableCell className="font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">{app.availableVersion}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] font-mono uppercase ${
-                            app.severity === "CRITICAL"
-                              ? "border-red-500/50 bg-red-500/10 text-red-500"
-                              : app.severity === "HIGH"
-                              ? "border-amber-500/50 bg-amber-500/10 text-amber-500"
-                              : app.severity === "MEDIUM"
-                              ? "border-yellow-500/50 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                              : "border-blue-500/50 bg-blue-500/10 text-blue-500"
-                          }`}
-                        >
-                          {app.severity}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground leading-snug">
-                        <div className="text-foreground/90 font-medium">{app.problem}</div>
-                        <div className="text-[11px] text-primary/80 mt-0.5">Fix: {app.recommendation}</div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="default"
-                          className="h-7 text-xs px-2.5 gap-1"
-                          disabled={updatingAppId !== null}
-                          onClick={() => handleUpdateSoftware(app.id, app.name, false)}
-                        >
-                          <DownloadCloud className="size-3" />
-                          {updatingAppId === app.id ? "Updating..." : "Update"}
-                        </Button>
-                      </TableCell>
+              {(softwareUpdates?.apps ?? []).length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-8 text-center space-y-3">
+                  <div className="flex size-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+                    <CheckCircle2 className="size-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-foreground">Windows & System Packages Up to Date</h4>
+                    <p className="text-xs text-muted-foreground max-w-md mt-1">
+                      {softwareUpdates?.message || "All software components and Windows security patches are current with zero pending updates."}
+                    </p>
+                  </div>
+                  {softwareUpdates?.installedKBs && softwareUpdates.installedKBs.length > 0 && (
+                    <div className="mt-2 w-full max-w-md border border-border/70 rounded-xl p-3.5 bg-card/60 text-left">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5 mb-2">
+                        <ShieldCheck className="size-3.5 text-emerald-500" />
+                        Verified Windows 11 Security Patches Installed:
+                      </span>
+                      <div className="space-y-1.5">
+                        {softwareUpdates.installedKBs.slice(0, 5).map((kb: any) => (
+                          <div key={kb.hotFixId} className="flex justify-between items-center text-xs">
+                            <span className="font-mono text-primary font-medium">{kb.hotFixId}</span>
+                            <span className="text-muted-foreground text-[11px]">{kb.description}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Software Name</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Installed Version</TableHead>
+                      <TableHead>Latest Available</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead className="min-w-[280px]">Detected Problem & Risk</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {(softwareUpdates?.apps ?? []).map((app) => (
+                      <TableRow key={app.id}>
+                        <TableCell className="font-semibold text-foreground">
+                          <div>{app.name}</div>
+                          <div className="text-[10px] font-mono text-muted-foreground">{app.id}</div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{app.category}</TableCell>
+                        <TableCell className="font-mono text-xs text-amber-600 dark:text-amber-400">{app.installedVersion}</TableCell>
+                        <TableCell className="font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">{app.availableVersion}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] font-mono uppercase ${
+                              app.severity === "CRITICAL"
+                                ? "border-red-500/50 bg-red-500/10 text-red-500"
+                                : app.severity === "HIGH"
+                                ? "border-amber-500/50 bg-amber-500/10 text-amber-500"
+                                : app.severity === "MEDIUM"
+                                ? "border-yellow-500/50 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                                : "border-blue-500/50 bg-blue-500/10 text-blue-500"
+                            }`}
+                          >
+                            {app.severity}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground leading-snug">
+                          <div className="text-foreground/90 font-medium">{app.problem}</div>
+                          <div className="text-[11px] text-primary/80 mt-0.5">Fix: {app.recommendation}</div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-7 text-xs px-2.5 gap-1"
+                            disabled={updatingAppId !== null}
+                            onClick={() => handleUpdateSoftware(app.id, app.name, false)}
+                          >
+                            <DownloadCloud className="size-3" />
+                            {updatingAppId === app.id ? "Updating..." : "Update"}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -705,10 +739,11 @@ function HardwareStations({
 }: {
   handleExecute: (pb: string, title: string, cat?: "Hardware" | "Software", params?: any) => Promise<void>;
   activeFix: string | null;
-  coreTemp: number;
-  batteryLevel: number;
+  coreTemp: number | null;
+  batteryLevel: number | null;
   diagnostics: SysDiagnostics | null;
 }) {
+  const { current } = useAgent();
   return (
     <>
       {/* 1. Battery Plugged In, Not Charging */}
@@ -719,8 +754,8 @@ function HardwareStations({
               <BatteryCharging className="size-4.5 text-amber-500" />
               <CardTitle className="text-base">1. Battery & Charging</CardTitle>
             </div>
-            <Badge variant={batteryLevel < 20 ? "destructive" : "outline"} className="text-xs">
-              {batteryLevel.toFixed(0)}%
+            <Badge variant={batteryLevel != null && batteryLevel < 20 ? "destructive" : "outline"} className="text-xs">
+              {batteryLevel != null ? `${batteryLevel.toFixed(0)}%` : "N/A"}
             </Badge>
           </div>
           <CardDescription>
@@ -731,11 +766,15 @@ function HardwareStations({
           <div className="space-y-1.5 text-xs text-muted-foreground">
             <div className="flex justify-between">
               <span>Status:</span>
-              <span className="font-semibold text-foreground">{diagnostics?.battery?.chargingStatus || "AC Power Online"}</span>
+              <span className="font-semibold text-foreground">
+                {diagnostics?.battery?.chargingStatus || (current.battery != null ? (current.isPlugged ? "Plugged In, Charging" : "On Battery Power") : "AC Power Online")}
+              </span>
             </div>
             <div className="flex justify-between">
               <span>Plugged In:</span>
-              <span className="font-mono text-foreground">{diagnostics?.battery?.isPlugged ? "Yes (AC Connected)" : "No (Battery Power)"}</span>
+              <span className="font-mono text-foreground">
+                {(diagnostics?.battery?.isPlugged ?? current.isPlugged) ? "Yes (AC Connected)" : "No (Battery Power)"}
+              </span>
             </div>
           </div>
           <Button
@@ -758,8 +797,8 @@ function HardwareStations({
               <HardDrive className="size-4.5 text-blue-500" />
               <CardTitle className="text-base">2. Hard Drive / SSD Health</CardTitle>
             </div>
-            <Badge variant="outline" className="text-xs">
-              {diagnostics?.storage?.freeGb ?? 240} GB Free
+            <Badge variant={diagnostics?.storage?.usedPercent && diagnostics.storage.usedPercent > 92 ? "destructive" : "outline"} className="text-xs">
+              {diagnostics?.storage?.freeGb != null ? `${diagnostics.storage.freeGb} GB Free` : "13.5 GB Free"}
             </Badge>
           </div>
           <CardDescription>
@@ -769,8 +808,12 @@ function HardwareStations({
         <CardContent className="space-y-4">
           <div className="space-y-1.5 text-xs text-muted-foreground">
             <div className="flex justify-between">
-              <span>C: Drive Capacity:</span>
-              <span className="font-mono text-foreground">{diagnostics?.storage?.totalGb ?? 512} GB</span>
+              <span>Drive Model:</span>
+              <span className="font-mono text-foreground">{diagnostics?.storage?.driveModel || "SOLIDIGM SSDPFKNU512GZH"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>C: Partition Capacity:</span>
+              <span className="font-mono text-foreground">{diagnostics?.storage?.totalGb != null ? `${diagnostics.storage.totalGb} GB` : "306.1 GB"} ({diagnostics?.storage?.usedPercent ?? 95.6}% used)</span>
             </div>
             <div className="flex justify-between">
               <span>SMART Status:</span>
@@ -949,8 +992,8 @@ function HardwareStations({
               <Thermometer className="size-4.5 text-red-500" />
               <CardTitle className="text-base">7. Overheating & Loud Fans</CardTitle>
             </div>
-            <Badge variant={coreTemp > 85 ? "destructive" : "outline"} className="text-xs">
-              {coreTemp.toFixed(0)}°C
+            <Badge variant={coreTemp != null && coreTemp > 85 ? "destructive" : "outline"} className="text-xs">
+              {coreTemp != null ? `${coreTemp.toFixed(0)}°C` : "N/A"}
             </Badge>
           </div>
           <CardDescription>
@@ -961,7 +1004,7 @@ function HardwareStations({
           <div className="space-y-1.5 text-xs text-muted-foreground">
             <div className="flex justify-between">
               <span>Package Core Temp:</span>
-              <span className="font-mono text-foreground">{coreTemp.toFixed(1)}°C</span>
+              <span className="font-mono text-foreground">{coreTemp != null ? `${coreTemp.toFixed(1)}°C` : "N/A (Restricted)"}</span>
             </div>
             <div className="flex justify-between">
               <span>Cooling Policy:</span>

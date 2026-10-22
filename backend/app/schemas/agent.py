@@ -8,6 +8,11 @@ class TelemetryData(BaseModel):
     latency: float = 0.0
     errorRate: float = Field(default=0.0, alias="error_rate")
     disk: float = 0.0
+    battery: Optional[float] = None
+    battery_available: Optional[bool] = Field(default=None, alias="batteryAvailable")
+    is_plugged: Optional[bool] = Field(default=None, alias="isPlugged")
+    temp: Optional[float] = None
+    temp_available: Optional[bool] = Field(default=None, alias="tempAvailable")
 
     class Config:
         populate_by_name = True

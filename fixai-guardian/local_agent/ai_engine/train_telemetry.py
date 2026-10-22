@@ -54,11 +54,11 @@ def locate_telemetry_file(provided_path: str | None = None) -> Path:
         return Path(provided_path).resolve()
 
     candidates = [
-        Path("c:/project/FixAI/fixai1/data/telemetry.jsonl"),
-        Path("c:/project/FixAI/data/telemetry.jsonl"),
+        Path(__file__).resolve().parents[3] / "data" / "telemetry.jsonl",
         Path("data/telemetry.jsonl"),
         Path("../data/telemetry.jsonl"),
         Path("../../data/telemetry.jsonl"),
+        Path("../../../data/telemetry.jsonl"),
     ]
 
     for c in candidates:

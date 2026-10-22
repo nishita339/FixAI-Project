@@ -1,7 +1,23 @@
 import asyncio
 import os
+import sys
+import warnings
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from pathlib import Path
+
+# Ensure 'backend' directory is on sys.path so 'app.*' imports work from anywhere
+# (including when running directly with 'python main.py' or VS Code Run button)
+_backend_dir = str(Path(__file__).resolve().parent.parent)
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
+
+# Filter noisy sklearn / pickle version warnings on newer Python runtimes
+warnings.filterwarnings("ignore", message=".*unpickle estimator.*")
+warnings.filterwarnings("ignore", message=".*serialized model.*")
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi.responses import JSONResponse
+import logging
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.agent_bridge import router as agent_router
@@ -25,9 +41,23 @@ async def _background_hardware_sampler():
     Real-time autonomic broadcaster loop.
     If WebSocket clients are connected and no external agent is pushing telemetry
     (e.g., standalone local mode or agent offline), samples host hardware via psutil
-    every 1 second and broadcasts real-time telemetry to the dashboard.
+    every 1 second, executes real Edge AI inference on the metrics, and broadcasts
+    real-time telemetry to the dashboard.
     """
-    import time, psutil, sys
+    import time, psutil, sys, socket
+    from pathlib import Path
+
+    # Initialize EdgeAIEngine for real ML scoring
+    edge_ai = None
+    try:
+        agent_dir = Path(__file__).resolve().parent.parent.parent / "fixai-guardian" / "local_agent"
+        if str(agent_dir) not in sys.path:
+            sys.path.append(str(agent_dir))
+        from ai_engine.inference import EdgeAIEngine
+        edge_ai = EdgeAIEngine(model_dir=agent_dir / "models")
+    except Exception:
+        edge_ai = None
+
     while True:
         try:
             if ws_manager.get_active_count() > 0:
@@ -41,9 +71,35 @@ async def _background_hardware_sampler():
                         path = "C:\\" if sys.platform == "win32" else "/"
                         disk = float(psutil.disk_usage(path).percent)
                     except Exception:
-                        disk = 45.0
+                        disk = 0.0
 
-                    temp = 42.0 + (cpu * 0.4)
+                    # Real core temperature check
+                    temp = None
+                    try:
+                        if hasattr(psutil, "sensors_temperatures"):
+                            temps = psutil.sensors_temperatures()
+                            if temps:
+                                for name, entries in temps.items():
+                                    for entry in entries:
+                                        if entry.current and entry.current > 0:
+                                            temp = round(float(entry.current), 1)
+                                            break
+                                    if temp is not None:
+                                        break
+                    except Exception:
+                        temp = None
+
+                    # Real network socket latency
+                    latency_ms = None
+                    try:
+                        t0 = time.perf_counter()
+                        s = socket.create_connection(("127.0.0.1", 8000), timeout=0.3)
+                        s.close()
+                        latency_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+                    except Exception:
+                        latency_ms = None
+
+                    # Real network error rate
                     net_err = 0.0
                     try:
                         net = psutil.net_io_counters()
@@ -52,17 +108,57 @@ async def _background_hardware_sampler():
                     except Exception:
                         pass
 
+                    # Real Edge ML Inference
+                    anom_score = None
+                    p_fail = None
+                    risk_level = "LOW"
+                    shap_data = None
+                    nlg_diag = None
+                    if edge_ai:
+                        try:
+                            ai_res = edge_ai.analyze({
+                                "cpu": cpu,
+                                "ram": float(mem.percent),
+                                "disk": disk,
+                                "latency": latency_ms or 0.0,
+                                "error_rate": net_err,
+                            })
+                            anom_score = ai_res.get("anomaly_score")
+                            p_fail = ai_res.get("p_failure")
+                            risk_level = ai_res.get("risk", "LOW")
+                            shap_data = ai_res.get("shap_weights")
+                            nlg_diag = ai_res.get("nlg_explanation")
+                        except Exception:
+                            pass
+
+                    # Real Battery sensing
+                    battery_pct = None
+                    is_plugged = None
+                    try:
+                        batt = psutil.sensors_battery()
+                        if batt and batt.percent is not None:
+                            battery_pct = round(float(batt.percent), 1)
+                            is_plugged = bool(batt.power_plugged)
+                    except Exception:
+                        pass
+
                     await ws_manager.broadcast_telemetry({
                         "t": now_ms,
                         "cpu": round(cpu, 1),
                         "ram": round(float(mem.percent), 1),
-                        "latency": 12.0,
+                        "latency": latency_ms,
                         "errorRate": net_err,
                         "disk": round(disk, 1),
-                        "temp": round(temp, 1),
-                        "anomalyScore": round(max(0.05, (cpu / 100.0) * 0.3), 2),
-                        "pFailure": round(max(0.02, (cpu / 100.0) * 0.25), 2),
-                        "risk": "LOW" if cpu < 80 else "MEDIUM",
+                        "temp": temp,
+                        "temp_available": temp is not None,
+                        "battery": battery_pct,
+                        "battery_available": battery_pct is not None,
+                        "is_plugged": is_plugged,
+                        "anomalyScore": anom_score,
+                        "pFailure": p_fail,
+                        "risk": risk_level,
+                        "shap": shap_data,
+                        "nlg_explanation": nlg_diag,
                         "device_id": "dev-laptop-001",
                         "device_name": "Local Workstation",
                         "isRealHardware": True,
@@ -117,6 +213,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.getLogger("fixai.api").error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    origin = request.headers.get("origin", "*")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc), "error": type(exc).__name__, "path": request.url.path},
+        headers={
+            "Access-Control-Allow-Origin": origin if origin else "*",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
+
 # Include agent bridge routes (/api/v1/agent/...)
 app.include_router(agent_router, prefix=settings.API_V1_STR)
 # Include recovery routes (/api/v1/recovery/...)
@@ -170,4 +282,10 @@ async def database_status():
 @app.get("/")
 async def root():
     return {"message": "FixAI Backend API is operational"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)
 

@@ -50,6 +50,26 @@ interface Row {
   systemName: string;
 }
 
+function normalizeShap(shap: any): { feature: string; value: number; attribution: number }[] {
+  if (!shap) return [];
+  if (Array.isArray(shap)) return shap;
+  if (typeof shap === "object") {
+    return Object.entries(shap).map(([key, val]) => ({
+      feature: key.toUpperCase(),
+      value: typeof val === "number" ? val : 0,
+      attribution: typeof val === "number" ? val : 0,
+    }));
+  }
+  return [];
+}
+
+function normalizeLogEvidence(logEvidence: any): string[] {
+  if (!logEvidence) return ["Live system telemetry within normal baseline. No anomalous log traces recorded."];
+  if (Array.isArray(logEvidence)) return logEvidence;
+  if (typeof logEvidence === "string") return [logEvidence];
+  return ["Live system telemetry within normal baseline."];
+}
+
 export default function Incidents() {
   const agent = useAgent();
   const convexRows = useSafeQuery(api.history.listIncidents, { limit: 50 });
@@ -207,46 +227,52 @@ export default function Incidents() {
               </DrawerHeader>
 
               {/* SHAP attributions */}
-              <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
-                <div className="flex items-center gap-2">
-                  <BrainCircuit className="size-4 text-primary" />
-                  <p className="text-sm font-semibold">Feature attributions (SHAP)</p>
-                </div>
-                <div className="mt-3 flex flex-col gap-2.5">
-                  {selected.shap.map((s) => {
-                    const max = Math.max(...selected.shap.map((x) => Math.abs(x.attribution)), 0.01);
-                    const width = Math.min(100, (Math.abs(s.attribution) / max) * 100);
-                    const positive = s.attribution >= 0;
-                    return (
-                      <div key={s.feature} className="flex items-center gap-3">
-                        <span className="w-32 shrink-0 text-xs font-medium text-muted-foreground">
-                          {s.feature}
-                        </span>
-                        <div className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-background">
-                          <div
-                            className={cn(
-                              "absolute inset-y-0 left-0 rounded-full transition-all duration-500",
-                              positive ? "bg-red-500/80" : "bg-emerald-500/80",
-                            )}
-                            style={{ width: `${width}%` }}
-                          />
-                        </div>
-                        <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                          {s.value.toFixed(0)}
-                          {s.feature.includes("Latency") ? "ms" : "%"} ·{" "}
-                          <span className={positive ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}>
-                            {positive ? "+" : ""}
-                            {s.attribution.toFixed(2)}
-                          </span>
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  Red bars push failure risk up; green bars are protective.
-                </p>
-              </div>
+              {(() => {
+                const shapList = normalizeShap(selected.shap);
+                if (shapList.length === 0) return null;
+                const max = Math.max(...shapList.map((x) => Math.abs(x.attribution || 0)), 0.01);
+                return (
+                  <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+                    <div className="flex items-center gap-2">
+                      <BrainCircuit className="size-4 text-primary" />
+                      <p className="text-sm font-semibold">Feature attributions (SHAP)</p>
+                    </div>
+                    <div className="mt-3 flex flex-col gap-2.5">
+                      {shapList.map((s) => {
+                        const width = Math.min(100, (Math.abs(s.attribution || 0) / max) * 100);
+                        const positive = (s.attribution || 0) >= 0;
+                        return (
+                          <div key={s.feature} className="flex items-center gap-3">
+                            <span className="w-32 shrink-0 text-xs font-medium text-muted-foreground truncate">
+                              {s.feature}
+                            </span>
+                            <div className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-background">
+                              <div
+                                className={cn(
+                                  "absolute inset-y-0 left-0 rounded-full transition-all duration-500",
+                                  positive ? "bg-red-500/80" : "bg-emerald-500/80",
+                                )}
+                                style={{ width: `${width}%` }}
+                              />
+                            </div>
+                            <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                              {(s.value ?? 0).toFixed(0)}
+                              {s.feature.includes("Latency") ? "ms" : "%"} ·{" "}
+                              <span className={positive ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}>
+                                {positive ? "+" : ""}
+                                {(s.attribution ?? 0).toFixed(2)}
+                              </span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Red bars push failure risk up; green bars are protective.
+                    </p>
+                  </div>
+                );
+              })()}
 
               {/* Counterfactuals */}
               {selected.counterfactuals && selected.counterfactuals.length > 0 && (
@@ -290,7 +316,7 @@ export default function Incidents() {
                   <p className="text-sm font-semibold text-white">Log evidence (fused ±30s)</p>
                 </div>
                 <pre className="mt-2.5 overflow-x-auto font-mono text-xs leading-5 text-emerald-300/90">
-                  {selected.logEvidence.join("\n")}
+                  {normalizeLogEvidence(selected.logEvidence).join("\n")}
                 </pre>
               </div>
 
@@ -344,7 +370,7 @@ export default function Incidents() {
           riskTier={reportIncident.risk}
           status={reportIncident.status}
           playbookName={reportIncident.playbookName || undefined}
-          logEvidence={reportIncident.logEvidence}
+          logEvidence={normalizeLogEvidence(reportIncident.logEvidence)}
         />
       )}
     </div>

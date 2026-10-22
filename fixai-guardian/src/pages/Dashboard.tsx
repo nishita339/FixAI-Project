@@ -344,20 +344,20 @@ export default function Dashboard() {
         <MetricCard
           icon={Thermometer}
           label="Core Thermal"
-          value={(current.temp ?? 48).toFixed(0)}
-          unit="°C"
-          progress={Math.min(100, ((current.temp ?? 48) / 100) * 100)}
-          tone={(current.temp ?? 48) > 85 ? "bad" : (current.temp ?? 48) > 70 ? "warn" : "good"}
-          hint={(current.temp ?? 48) > 85 ? "Throttling" : (current.temp ?? 48) > 70 ? "Warm" : "Cool"}
+          value={current.temp != null ? current.temp.toFixed(0) : "N/A"}
+          unit={current.temp != null ? "°C" : ""}
+          progress={current.temp != null ? Math.min(100, (current.temp / 100) * 100) : 0}
+          tone={current.temp != null ? (current.temp > 85 ? "bad" : current.temp > 70 ? "warn" : "good") : "default"}
+          hint={current.temp != null ? (current.temp > 85 ? "Throttling" : current.temp > 70 ? "Warm" : "Cool") : "Restricted"}
         />
         <MetricCard
           icon={BatteryMedium}
           label="Battery Health"
-          value={(current.battery ?? 88).toFixed(0)}
-          unit="%"
-          progress={current.battery ?? 88}
-          tone={(current.battery ?? 88) < 20 ? "bad" : (current.battery ?? 88) < 40 ? "warn" : "good"}
-          hint={(current.battery ?? 88) < 20 ? "Critical" : (current.battery ?? 88) < 40 ? "Discharging" : "Optimal"}
+          value={current.battery != null ? current.battery.toFixed(0) : "N/A"}
+          unit={current.battery != null ? "%" : ""}
+          progress={current.battery != null ? current.battery : 0}
+          tone={current.battery != null ? (current.battery < 20 ? "bad" : current.battery < 40 ? "warn" : "good") : "default"}
+          hint={current.battery != null ? (current.isPlugged ? "AC Connected" : "On Battery") : "No Battery"}
         />
         <MetricCard
           icon={MemoryStick}

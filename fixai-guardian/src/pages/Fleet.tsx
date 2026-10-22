@@ -1,3 +1,4 @@
+import { FASTAPI_URL } from "@/lib/api-config";
 import React, { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,7 @@ export default function Fleet() {
   const fetchFleet = async () => {
     setLoading(true);
     try {
-      const backendUrl = import.meta.env.VITE_FASTAPI_URL || "http://localhost:8000";
+      const backendUrl = FASTAPI_URL;
       const res = await fetch(`${backendUrl}/api/v1/agent/fleet`);
       if (res.ok) {
         const data = await res.json();
@@ -92,128 +93,18 @@ export default function Fleet() {
       } else {
         throw new Error("Failed to load fleet");
       }
-    } catch {
-      // Deterministic fallback fleet if server offline
-      const mockDevices: FleetDevice[] = [
-        {
-          id: "dev-laptop-001",
-          name: "Primary Host (This Laptop)",
-          hostname: "local-workstation",
-          os: "Windows 11 Pro 23H2",
-          arch: "x86_64",
-          is_online: true,
-          status: "HEALTHY",
-          health_score: 96.5,
-          cpu_percent: 24.5,
-          ram_percent: 54.2,
-          disk_percent: 42.0,
-          temperature_c: 52.0,
-          active_threats: [],
-          last_seen: new Date().toISOString(),
-          connection_mode: "WEBSOCKET_STREAM",
-          ip_address: "192.168.1.105",
-        },
-        {
-          id: "dev-macbook-m3-002",
-          name: "MacBook Pro M3 Max",
-          hostname: "macbook-pro-alice",
-          os: "macOS Sonoma 14.5",
-          arch: "arm64",
-          is_online: true,
-          status: "HEALTHY",
-          health_score: 98.4,
-          cpu_percent: 14.2,
-          ram_percent: 41.8,
-          disk_percent: 35.0,
-          temperature_c: 42.5,
-          active_threats: [],
-          last_seen: new Date().toISOString(),
-          connection_mode: "WEBSOCKET_STREAM",
-          ip_address: "192.168.1.112",
-        },
-        {
-          id: "dev-ubuntu-prod-003",
-          name: "Ubuntu Inference Server 01",
-          hostname: "srv-prod-ai-01",
-          os: "Ubuntu 24.04 LTS (Kernel 6.8)",
-          arch: "x86_64",
-          is_online: true,
-          status: "DEGRADED",
-          health_score: 76.0,
-          cpu_percent: 88.4,
-          ram_percent: 84.1,
-          disk_percent: 79.2,
-          temperature_c: 74.0,
-          active_threats: ["HIGH_RESOURCE_BURN"],
-          last_seen: new Date().toISOString(),
-          connection_mode: "WEBSOCKET_STREAM",
-          ip_address: "10.0.4.15",
-        },
-        {
-          id: "dev-win11-finance-004",
-          name: "Finance Workstation 04",
-          hostname: "corp-fin-desk-04",
-          os: "Windows 11 Enterprise",
-          arch: "x86_64",
-          is_online: true,
-          status: "CRITICAL",
-          health_score: 38.5,
-          cpu_percent: 45.1,
-          ram_percent: 68.0,
-          disk_percent: 55.4,
-          temperature_c: 62.0,
-          active_threats: ["CANARY_TAMPER_SUSPECT", "BRUTE_FORCE_ATTACK"],
-          last_seen: new Date().toISOString(),
-          connection_mode: "OFFLINE_STORE_FORWARD",
-          ip_address: "192.168.2.44",
-        },
-        {
-          id: "dev-debian-gateway-005",
-          name: "Edge Gateway Router",
-          hostname: "gw-edge-router-01",
-          os: "Debian 12 Bookworm",
-          arch: "x86_64",
-          is_online: true,
-          status: "HEALTHY",
-          health_score: 99.1,
-          cpu_percent: 6.8,
-          ram_percent: 22.4,
-          disk_percent: 18.0,
-          temperature_c: 38.0,
-          active_threats: [],
-          last_seen: new Date().toISOString(),
-          connection_mode: "WEBSOCKET_STREAM",
-          ip_address: "10.0.0.1",
-        },
-        {
-          id: "dev-thinkpad-exec-006",
-          name: "ThinkPad X1 Carbon",
-          hostname: "exec-laptop-carol",
-          os: "Windows 11 Pro 23H2",
-          arch: "x86_64",
-          is_online: false,
-          status: "HEALTHY",
-          health_score: 92.0,
-          cpu_percent: 0.0,
-          ram_percent: 0.0,
-          disk_percent: 58.0,
-          temperature_c: 0.0,
-          active_threats: [],
-          last_seen: new Date(Date.now() - 7200000).toISOString(),
-          connection_mode: "OFFLINE",
-          ip_address: "192.168.1.189",
-        },
-      ];
-      setDevices(mockDevices);
+    } catch (err: any) {
+      setDevices([]);
       setSummary({
-        total_devices: 6,
-        online_devices: 5,
-        offline_devices: 1,
-        critical_devices: 1,
-        degraded_devices: 1,
-        healthy_devices: 4,
-        average_fleet_health: 83.4,
+        total_devices: 0,
+        online_devices: 0,
+        offline_devices: 0,
+        critical_devices: 0,
+        degraded_devices: 0,
+        healthy_devices: 0,
+        average_fleet_health: 0,
       });
+      toast.error("Unable to connect to FixAI backend fleet service. Please check server status.");
     } finally {
       setLoading(false);
     }

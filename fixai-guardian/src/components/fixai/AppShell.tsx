@@ -44,6 +44,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { SecurityCopilot } from "@/components/fixai/SecurityCopilot";
 import { EmergencyLockdownModal } from "@/components/fixai/EmergencyLockdownModal";
 import { audioAlerts } from "@/lib/audio-alerts";
+import { openPrivacyConsentModal } from "@/components/fixai/CookieConsentBanner";
 
 
 const NAV = [
@@ -230,6 +231,13 @@ export default function AppShell() {
             </div>
           </div>
 
+          <button
+            type="button"
+            onClick={openPrivacyConsentModal}
+            className="w-full flex items-center justify-start gap-2 px-2 py-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted/50 cursor-pointer text-left"
+          >
+            <ShieldCheck className="size-3.5 text-primary shrink-0" /> Privacy & Cookies
+          </button>
           <Button
             variant="ghost"
             size="sm"
@@ -373,6 +381,9 @@ export default function AppShell() {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/dashboard/permissions")}>
                     <Settings className="size-4 mr-2" /> Policy & Risk Rules
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={openPrivacyConsentModal}>
+                    <ShieldCheck className="size-4 mr-2" /> Privacy & Cookies
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">

@@ -26,69 +26,90 @@ This guide details how to deploy FixAI to production in under 5 minutes using th
 
 ---
 
-## Step 1: Deploy Backend to Render (or Railway)
+## Step 1: Deploy to Render via Blueprint (Both Frontend & Backend in 1 Click)
 
-### Option A: Render (Recommended — Blueprint Ready)
+The project includes an enterprise `render.yaml` specification that automates provisioning of both the **FastAPI Backend** and the **React Vite Static Site** simultaneously.
 
-1. **Sign Up / Log In:** Go to [render.com](https://render.com) and sign in with your GitHub account.
-2. **Create New Blueprint:**
-   - Click **New +** → **Blueprint**.
-   - Connect your GitHub repository: `nishita339/FixAI-Project`.
-   - Render automatically detects `render.yaml` and provisions the `fixai-backend` service.
+1. **Sign Up / Log In:** Go to [render.com](https://render.com) and log in with your GitHub account.
+2. **Deploy Blueprint:**
+   - On the Render Dashboard, click **New +** → **Blueprint**.
+   - Select your GitHub repository: `FixAI-Project`.
+   - Render will parse `render.yaml` and discover two managed services:
+     1. `fixai-backend` (Python Web Service)
+     2. `fixai-frontend` (Static Site)
    - Click **Apply**.
-3. **Manual Web Service (Alternative if not using Blueprint):**
-   - Click **New +** → **Web Service**.
-   - Select your repository: `nishita339/FixAI-Project`.
-   - Configure settings:
-     - **Name:** `fixai-backend`
-     - **Root Directory:** `backend`
-     - **Runtime:** `Python 3`
-     - **Build Command:** `pip install --upgrade pip && pip install -r requirements.txt`
-     - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-     - **Plan:** `Free`
-   - **Environment Variables:**
-     - `PYTHON_VERSION` = `3.11.9`
-     - `FIXAI_ENV` = `production`
-     - `JWT_SECRET` = *(Click Generate or enter a secure 32+ char key)*
-     - `CONVEX_DEVICE_API_KEY` = `fixai-device-secret-key-2026`
-     - `DEFAULT_DEVICE_KEY` = `fixai-device-secret-key-2026`
-     - `CORS_ORIGINS` = `https://<your-vercel-app>.vercel.app,http://localhost:5173`
-   - Click **Create Web Service**.
-4. **Copy your Backend URL:** Once deployed, Render will provide a public URL like:
-   `https://fixai-backend-xxxx.onrender.com`
-   Test it by opening: `https://fixai-backend-xxxx.onrender.com/health` (should return `{"status": "healthy"}`).
+   - Render will build both services automatically!
+3. **Get Your URLs:**
+   - **Backend URL:** e.g., `https://fixai-backend.onrender.com` (or `https://fixai-backend-xxxx.onrender.com`)
+   - **Frontend URL:** e.g., `https://fixai-frontend.onrender.com` (or `https://fixai-frontend-xxxx.onrender.com`)
+4. **Synchronize Frontend Env Variable (if custom name generated):**
+   - In Render Dashboard → `fixai-frontend` → **Environment**:
+   - Ensure `VITE_FASTAPI_URL` is set to your actual `fixai-backend` URL (e.g. `https://fixai-backend-xxxx.onrender.com`).
+   - Trigger a deploy (`Manual Deploy` → `Clear build cache & deploy`).
 
 ---
 
-## Step 2: Deploy Frontend to Vercel
+## Step 2: Manual Render Service Setup (Alternative to Blueprint)
+
+If you prefer to configure each service manually without Blueprint:
+
+### 1. Backend Web Service (`fixai-backend`):
+- Click **New +** → **Web Service**.
+- Connect your GitHub repository.
+- Configure:
+  - **Name:** `fixai-backend`
+  - **Root Directory:** `backend`
+  - **Runtime:** `Python 3`
+  - **Build Command:** `pip install --upgrade pip && pip install -r requirements.txt`
+  - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+  - **Health Check Path:** `/health`
+  - **Plan:** `Free`
+- **Environment Variables:**
+  - `PYTHON_VERSION` = `3.11.9`
+  - `FIXAI_ENV` = `production`
+  - `JWT_SECRET` = *(Click Generate or enter a 32+ character random key)*
+  - `CONVEX_DEVICE_API_KEY` = *(Click Generate or enter a key)*
+  - `DEFAULT_DEVICE_KEY` = *(Same as CONVEX_DEVICE_API_KEY)*
+  - `DATABASE_URL` = `sqlite+aiosqlite:///./fixai.db` *(or your Render PostgreSQL internal URL)*
+  - `CORS_ORIGINS` = `https://fixai-frontend.onrender.com,http://localhost:5173`
+- Click **Create Web Service**.
+
+### 2. Frontend Static Site (`fixai-frontend`):
+- Click **New +** → **Static Site**.
+- Connect your GitHub repository.
+- Configure:
+  - **Name:** `fixai-frontend`
+  - **Root Directory:** `fixai-guardian`
+  - **Build Command:** `npm install && npm run build`
+  - **Publish Directory:** `dist`
+- **Rewrite Rules (for Single Page App routing):**
+  - Go to **Redirects/Rewrites**:
+  - Add Rule: `/*` → `/index.html` (Rewrite)
+- **Environment Variables:**
+  - `VITE_FASTAPI_URL` = `https://fixai-backend.onrender.com` *(your actual Render backend URL)*
+- Click **Create Static Site**.
+
+---
+
+## Step 3: Deploy Frontend to Vercel (Alternative Frontend Hosting)
+
+If you prefer hosting the frontend on Vercel Edge while keeping the backend on Render:
 
 1. **Sign Up / Log In:** Go to [vercel.com](https://vercel.com) and log in with your GitHub account.
 2. **Import Project:**
    - Click **Add New...** → **Project**.
-   - Select `nishita339/FixAI-Project` from your repository list.
+   - Select your GitHub repository: `FixAI-Project`.
 3. **Configure Project:**
    - **Framework Preset:** `Vite`
    - **Root Directory:** Click `Edit` and select `fixai-guardian`
    - **Build Command:** `npm run build`
    - **Output Directory:** `dist`
 4. **Set Environment Variables:**
-   Add the following under **Environment Variables**:
-   - `VITE_FASTAPI_URL` = `https://fixai-backend-xxxx.onrender.com` *(your Render backend URL from Step 1)*
+   - `VITE_FASTAPI_URL` = `https://fixai-backend-xxxx.onrender.com` *(your Render backend URL)*
    - `VITE_CONVEX_URL` = `https://mock.convex.cloud`
 5. **Deploy:** Click **Deploy**.
-   Vercel will build and assign you a global domain:
-   `https://fixai-guardian.vercel.app`
-
----
-
-## Step 3: Link Backend CORS to your Vercel Domain
-
-1. Go back to your **Render Dashboard** → `fixai-backend` → **Environment**.
-2. Update the `CORS_ORIGINS` variable:
-   ```env
-   CORS_ORIGINS=https://fixai-guardian.vercel.app
-   ```
-3. Save changes. Render will automatically re-deploy with your custom frontend domain allowed.
+   Vercel will build and assign you a global domain: `https://fixai-guardian.vercel.app`.
+   *(Note: The FixAI backend automatically permits all `*.vercel.app` and `*.onrender.com` origins).*
 
 ---
 
