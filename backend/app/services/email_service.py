@@ -221,9 +221,7 @@ def _send_smtp_sync(recipient_email: str, otp_code: str, expire_minutes: int) ->
         if settings.SMTP_USER and settings.SMTP_PASSWORD:
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
 
-        # Add standard email headers for compliance
-        msg['Date'] = formatdate(localtime=True)
-        msg['Message-ID'] = make_msgid()
+        # Headers already added above compliant with RFC 5322
 
         server.sendmail(from_email, [recipient_email], msg.as_string())
         server.quit()
@@ -241,7 +239,13 @@ def _send_smtp_sync(recipient_email: str, otp_code: str, expire_minutes: int) ->
             f"  Note:      Check Inbox AND Spam / Junk / Promotions folder!\n"
             f"================================================================================\n"
         )
-        print(banner)
+        try:
+            print(banner)
+        except Exception:
+            try:
+                print(banner.encode('ascii', errors='replace').decode('ascii'))
+            except Exception:
+                pass
         logger.info("Successfully delivered OTP email to %s via SMTP (%s:%d)", recipient_email, settings.SMTP_HOST, settings.SMTP_PORT)
         return True, "OTP sent successfully to your email."
 
@@ -256,7 +260,13 @@ def _send_smtp_sync(recipient_email: str, otp_code: str, expire_minutes: int) ->
                 f"    Falling back to local relay for {recipient_email}\n"
                 f"    OTP Code: >>>  {otp_code}  <<<\n"
             )
-            print(fallback_banner)
+            try:
+                print(fallback_banner)
+            except Exception:
+                try:
+                    print(fallback_banner.encode('ascii', errors='replace').decode('ascii'))
+                except Exception:
+                    pass
             return True, "OTP sent successfully (check inbox, spam, or local console)."
         return False, f"SMTP delivery failure: {str(exc)}"
 

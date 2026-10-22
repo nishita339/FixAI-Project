@@ -17,7 +17,11 @@ from typing import Any, Dict, Optional
 
 import jwt
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
+try:
+    from pydantic import BaseModel, EmailStr, Field
+except (ImportError, Exception):
+    from pydantic import BaseModel, Field  # type: ignore
+    EmailStr = str  # type: ignore
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
