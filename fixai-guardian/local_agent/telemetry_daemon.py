@@ -29,6 +29,7 @@ import json
 import logging
 import os
 import signal
+import socket
 import sys
 import time
 from pathlib import Path
@@ -134,8 +135,8 @@ def _write_ipc_alert(alert_data: Dict[str, Any]) -> None:
 # Metric Collection (same as main.py — shared logic)
 # ───────────────────────────────────────────────────────────────────────────
 
-def collect_hardware_metrics() -> Dict[str, float]:
-    """Collect real-time hardware telemetry using psutil."""
+def collect_hardware_metrics() -> Dict[str, Any]:
+    """Collect genuine real-time hardware telemetry using psutil, socket, and native OS APIs."""
     cpu_usage = float(psutil.cpu_percent(interval=1.0))
     memory_info = psutil.virtual_memory()
 
@@ -145,35 +146,78 @@ def collect_hardware_metrics() -> Dict[str, float]:
     except Exception:
         disk_usage = 75.0
 
-    battery_pct = 100.0
+    battery_pct = None
+    is_plugged = None
     try:
         batt = psutil.sensors_battery()
-        if batt:
-            battery_pct = float(batt.percent)
+        if batt and batt.percent is not None:
+            battery_pct = round(float(batt.percent), 1)
+            is_plugged = bool(batt.power_plugged)
     except Exception:
-        battery_pct = 95.0
+        battery_pct = None
 
-    core_temp = 48.0
+    core_temp = None
     try:
-        temps = psutil.sensors_temperatures() if hasattr(psutil, "sensors_temperatures") else {}
-        if temps:
-            for name, entries in temps.items():
-                if entries:
-                    core_temp = float(entries[0].current)
-                    break
-        else:
-            core_temp = 42.0 + (cpu_usage * 0.45)
+        if hasattr(psutil, "sensors_temperatures"):
+            temps = psutil.sensors_temperatures()
+            if temps:
+                for name, entries in temps.items():
+                    for entry in entries:
+                        if entry.current and entry.current > 0:
+                            core_temp = round(float(entry.current), 1)
+                            break
+                    if core_temp is not None:
+                        break
+        if core_temp is None and sys.platform == "win32":
+            try:
+                import wmi
+                w = wmi.WMI(namespace="root/wmi")
+                zones = w.MSAcpi_ThermalZoneTemperature()
+                if zones:
+                    k = zones[0].CurrentTemperature
+                    c = (k / 10.0) - 273.15
+                    if 10.0 < c < 120.0:
+                        core_temp = round(float(c), 1)
+            except Exception:
+                pass
     except Exception:
-        core_temp = 42.0 + (cpu_usage * 0.45)
+        core_temp = None
+
+    latency_ms = None
+    try:
+        t0 = time.perf_counter()
+        s = socket.create_connection(("127.0.0.1", 8000), timeout=0.4)
+        s.close()
+        latency_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+    except Exception:
+        try:
+            t0 = time.perf_counter()
+            s = socket.create_connection(("8.8.8.8", 53), timeout=0.8)
+            s.close()
+            latency_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+        except Exception:
+            latency_ms = None
+
+    error_rate = 0.0
+    try:
+        net_io = psutil.net_io_counters()
+        total_packets = (net_io.packets_recv + net_io.packets_sent) or 1
+        total_errors = net_io.errin + net_io.errout + net_io.dropin + net_io.dropout
+        error_rate = round((total_errors / total_packets) * 100.0, 2)
+    except Exception:
+        error_rate = 0.0
 
     return {
         "cpu": round(cpu_usage, 1),
         "ram": round(float(memory_info.percent), 1),
-        "latency": 12.0,
-        "error_rate": 0.0,
+        "latency": latency_ms,
+        "error_rate": error_rate,
         "disk": round(disk_usage, 1),
-        "temp": round(core_temp, 1),
-        "battery": round(battery_pct, 1),
+        "temp": core_temp,
+        "temp_available": core_temp is not None,
+        "battery": battery_pct,
+        "battery_available": battery_pct is not None,
+        "is_plugged": is_plugged,
     }
 
 

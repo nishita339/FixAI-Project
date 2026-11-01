@@ -308,9 +308,11 @@ async def run_tests():
             assert "OTP sent successfully" in send_data["message"]
             assert send_data["cooldown_seconds"] == 45
             assert send_data["expires_in_seconds"] == 300
-            valid_otp = send_data.get("dev_otp")
+            assert send_data.get("dev_otp") is None, "Security Violation: OTP must NOT be exposed in API response"
+            from app.services.otp_service import otp_manager
+            valid_otp = otp_manager.get_active_otp(test_email)
             assert valid_otp and len(valid_otp) == 6, f"Valid OTP not generated: {valid_otp}"
-            print(f"[{total}] PASS: POST /api/v1/auth/send-otp -> 200 OK (OTP dispatched, 45s cooldown, 300s expiry)")
+            print(f"[{total}] PASS: POST /api/v1/auth/send-otp -> 200 OK (OTP dispatched to email, not leaked in HTTP response)")
             passed += 1
 
             # Test 24: Email OTP - Cooldown Enforcement (Immediate Resend Blocked)

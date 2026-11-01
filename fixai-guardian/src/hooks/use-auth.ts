@@ -37,13 +37,7 @@ export function useAuth() {
     }
   });
 
-  const [activeOtp, setActiveOtp] = useState<string | null>(() => {
-    try {
-      return sessionStorage.getItem(MOCK_OTP_KEY) || null;
-    } catch {
-      return null;
-    }
-  });
+  const [activeOtp, setActiveOtp] = useState<string | null>(null);
 
   const [isTimedOut, setIsTimedOut] = useState(false);
 
@@ -75,36 +69,21 @@ export function useAuth() {
         throw new Error(errorMsg);
       }
 
-      if (data.dev_otp) {
-        sessionStorage.setItem(MOCK_OTP_KEY, data.dev_otp);
-        setActiveOtp(data.dev_otp);
-      }
+      sessionStorage.removeItem(MOCK_OTP_KEY);
+      setActiveOtp(null);
 
       return {
         success: true,
         message: data.message || "OTP sent successfully to your email.",
         cooldownSeconds: data.cooldown_seconds ?? 45,
         expiresInSeconds: data.expires_in_seconds ?? 300,
-        devOtp: data.dev_otp,
+        devOtp: undefined,
       };
     } catch (err: any) {
-      // If FastAPI is reachable and rejected with a known error, rethrow
       if (err.message && err.message !== "Failed to fetch") {
         throw err;
       }
-
-      // Offline dev fallback if backend is unreachable
-      console.warn("[FixAI Auth] Backend unreachable. Generating offline dev OTP.");
-      const fallbackOtp = "123456";
-      sessionStorage.setItem(MOCK_OTP_KEY, fallbackOtp);
-      setActiveOtp(fallbackOtp);
-      return {
-        success: true,
-        message: "OTP sent successfully to your email.",
-        cooldownSeconds: 45,
-        expiresInSeconds: 300,
-        devOtp: fallbackOtp,
-      };
+      throw new Error("FixAI Authentication service is currently unreachable. Please check backend connection.");
     }
   }, []);
 
@@ -125,32 +104,21 @@ export function useAuth() {
         throw new Error(errorMsg);
       }
 
-      if (data.dev_otp) {
-        sessionStorage.setItem(MOCK_OTP_KEY, data.dev_otp);
-        setActiveOtp(data.dev_otp);
-      }
+      sessionStorage.removeItem(MOCK_OTP_KEY);
+      setActiveOtp(null);
 
       return {
         success: true,
         message: data.message || "OTP sent successfully to your email.",
         cooldownSeconds: data.cooldown_seconds ?? 45,
         expiresInSeconds: data.expires_in_seconds ?? 300,
-        devOtp: data.dev_otp,
+        devOtp: undefined,
       };
     } catch (err: any) {
       if (err.message && err.message !== "Failed to fetch") {
         throw err;
       }
-      const fallbackOtp = "123456";
-      sessionStorage.setItem(MOCK_OTP_KEY, fallbackOtp);
-      setActiveOtp(fallbackOtp);
-      return {
-        success: true,
-        message: "OTP sent successfully to your email.",
-        cooldownSeconds: 45,
-        expiresInSeconds: 300,
-        devOtp: fallbackOtp,
-      };
+      throw new Error("FixAI Authentication service is currently unreachable. Please check backend connection.");
     }
   }, []);
 

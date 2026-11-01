@@ -152,6 +152,12 @@ class OtpManager:
         del self._store[email]
         return True, "OTP verified successfully"
 
+    def get_active_otp(self, raw_email: str) -> Optional[str]:
+        """Returns the active OTP code for test verification / diagnostics without exposing it over API."""
+        entry = self._store.get(raw_email.strip().lower())
+        return entry.code if entry else None
+
+
     def get_remaining_expiry(self, raw_email: str) -> int:
         """Returns remaining validity seconds for active OTP, or 0 if expired/none."""
         email = raw_email.strip().lower()

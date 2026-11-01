@@ -3,11 +3,11 @@
 block_cipher = None
 
 a = Analysis(
-    ['N:/code/FixAI1/FixAI-Project/fixai-guardian/local_agent/main.py'],
-    pathex=['N:/code/FixAI1/FixAI-Project/fixai-guardian/local_agent'],
+    ['C:/Users/Monika/OneDrive/Desktop/FixAI-Project (2)/FixAI-Project/fixai-guardian/local_agent/main.py'],
+    pathex=['C:/Users/Monika/OneDrive/Desktop/FixAI-Project (2)/FixAI-Project/fixai-guardian/local_agent'],
     binaries=[],
     datas=[
-        ('N:/code/FixAI1/FixAI-Project/fixai-guardian/local_agent/models', 'models'),
+        ('C:/Users/Monika/OneDrive/Desktop/FixAI-Project (2)/FixAI-Project/fixai-guardian/local_agent/models', 'models'),
     ],
     hiddenimports=[
         'sklearn',

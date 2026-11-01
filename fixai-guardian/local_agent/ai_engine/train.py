@@ -69,11 +69,11 @@ def locate_dataset(provided_path: str | None = None) -> Path:
         return Path(provided_path)
 
     candidates = [
+        Path(__file__).resolve().parents[3] / "data" / "ai4i2020.csv",
         Path("data/ai4i2020.csv"),
         Path("../data/ai4i2020.csv"),
         Path("../../data/ai4i2020.csv"),
-        Path("C:/project/FixAI/fixai1/data/ai4i2020.csv"),
-        Path("C:/project/FixAI/data/ai4i2020.csv"),
+        Path("../../../data/ai4i2020.csv"),
     ]
 
     for p in candidates:

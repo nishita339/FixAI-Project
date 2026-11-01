@@ -1,6 +1,77 @@
 {
-  "timestamp": 1789320146,
-  "domain": "telemetry",
+  "timestamp": 1792648425,
+  "domain": "all",
+  "ai4i": {
+    "test_samples": 2000,
+    "test_failures": 68,
+    "binary_classification": {
+      "f1": 0.7733,
+      "recall": 0.8529,
+      "precision": 0.7073,
+      "roc_auc": 0.9783,
+      "pr_auc": 0.8822,
+      "confusion_matrix": {
+        "tp": 58,
+        "fp": 24,
+        "fn": 10,
+        "tn": 1908
+      }
+    },
+    "isolation_forest": {
+      "f1": 0.2734,
+      "recall": 0.2794,
+      "precision": 0.2676
+    },
+    "multilabel_diagnosis": {
+      "TWF": {
+        "f1": 0.116,
+        "recall": 0.4,
+        "precision": 0.068,
+        "pr_auc": 0.106,
+        "test_occurrences": 10
+      },
+      "HDF": {
+        "f1": 0.949,
+        "recall": 0.966,
+        "precision": 0.933,
+        "pr_auc": 0.987,
+        "test_occurrences": 29
+      },
+      "PWF": {
+        "f1": 0.929,
+        "recall": 1.0,
+        "precision": 0.867,
+        "pr_auc": 0.923,
+        "test_occurrences": 13
+      },
+      "OSF": {
+        "f1": 0.97,
+        "recall": 1.0,
+        "precision": 0.941,
+        "pr_auc": 1.0,
+        "test_occurrences": 16
+      },
+      "RNF": {
+        "f1": 0.0,
+        "recall": 0.0,
+        "precision": 0.0,
+        "pr_auc": 0.008,
+        "test_occurrences": 4
+      }
+    }
+  },
+  "cmapss": {
+    "test_engines": 100,
+    "total_test_cycles": 13096,
+    "last_cycle_benchmark": {
+      "rmse_clipped": 17.559,
+      "mae_clipped": 12.321,
+      "r2_clipped": 0.808,
+      "rmse_unclipped": 18.576,
+      "mae_unclipped": 13.391,
+      "nasa_score": 928.16
+    }
+  },
   "telemetry": {
     "samples_evaluated": 1013,
     "inlier_ratio": 0.9842,
@@ -32,5 +103,5 @@
       }
     ]
   },
-  "total_evaluation_time_seconds": 0.52
+  "total_evaluation_time_seconds": 1.47
 }

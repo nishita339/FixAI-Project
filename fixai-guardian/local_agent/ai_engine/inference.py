@@ -147,11 +147,12 @@ class EdgeAIEngine:
                 - nlg_explanation: str (human-readable root-cause diagnosis)
         """
         # 1. Normalize and extract features in strictly ordered sequence
-        c = float(hardware_metrics.get("cpu", 0.0))
-        r = float(hardware_metrics.get("ram", 0.0))
-        lat = float(hardware_metrics.get("latency", 0.0))
-        err = float(hardware_metrics.get("error_rate", hardware_metrics.get("errorRate", 0.0)))
-        d = float(hardware_metrics.get("disk", 0.0))
+        c = float(hardware_metrics.get("cpu") if hardware_metrics.get("cpu") is not None else 0.0)
+        r = float(hardware_metrics.get("ram") if hardware_metrics.get("ram") is not None else 0.0)
+        lat = float(hardware_metrics.get("latency") if hardware_metrics.get("latency") is not None else 0.0)
+        err_val = hardware_metrics.get("error_rate") if hardware_metrics.get("error_rate") is not None else hardware_metrics.get("errorRate")
+        err = float(err_val if err_val is not None else 0.0)
+        d = float(hardware_metrics.get("disk") if hardware_metrics.get("disk") is not None else 0.0)
 
         raw_vector = np.array([[c, r, lat, err, d]])
 
@@ -172,13 +173,25 @@ class EdgeAIEngine:
 
         p_failure = float(np.clip(p_failure, 0.001, 0.999))
 
-        # 5. Risk Categorization
-        if p_failure >= 0.70 or anomaly_score >= 0.75:
+        # 5. Risk Categorization grounded in REAL operational hardware telemetry
+        #    A real Windows developer workstation normally runs:
+        #      CPU: 5-40%  (browser, IDE, builds)   → NOT a problem
+        #      RAM: 60-90% (Chrome, VS Code, etc.)  → normal for 8-16 GB machine
+        #      Disk: 80-97% (apps, games, data)     → normal consumer SSD
+        #    Only truly extreme values should flag risk:
+        is_real_critical = (c >= 95.0 or r >= 97.0 or d >= 99.5 or lat >= 5000.0 or err >= 25.0)
+        is_real_degraded = (c >= 85.0 or r >= 93.0 or d >= 98.0 or lat >= 2000.0 or err >= 10.0)
+
+        if is_real_critical:
             risk = "HIGH"
-        elif p_failure >= 0.40 or anomaly_score >= 0.45:
+            p_failure = max(p_failure, 0.75)
+        elif is_real_degraded:
             risk = "MEDIUM"
+            p_failure = min(max(p_failure, 0.35), 0.70)
         else:
             risk = "LOW"
+            p_failure = min(p_failure, 0.15)
+            anomaly_score = min(anomaly_score, 0.35)
 
         # 6. SHAP Attribution Weights
         shap_weights = self._compute_shap_weights(features_scaled, raw_vector[0])
@@ -267,32 +280,35 @@ class EdgeAIEngine:
         top_driver = max(shap_weights, key=lambda k: shap_weights[k])
         val = raw_metrics.get(top_driver, 0.0)
 
-        explanations = {
-            "cpu": (
+        # Check if metric is truly elevated
+        if top_driver == "cpu" and val >= 70.0:
+            return (
                 f"System is at {risk} risk (P_fail: {p_failure:.2f}) because CPU utilization "
-                f"is critically elevated at {val:.1f}%, indicating process saturation."
-            ),
-            "ram": (
+                f"is elevated at {val:.1f}%, indicating heavy processing load."
+            )
+        elif top_driver == "ram" and val >= 80.0:
+            return (
                 f"System is at {risk} risk (P_fail: {p_failure:.2f}) because RAM consumption "
-                f"is critically high at {val:.1f}%, risking memory exhaustion and swap thrashing."
-            ),
-            "latency": (
-                f"System is at {risk} risk (P_fail: {p_failure:.2f}) due to network latency degradation "
-                f"peaking at {val:.1f}ms, far exceeding baseline thresholds."
-            ),
-            "error_rate": (
-                f"System is at {risk} risk (P_fail: {p_failure:.2f}) caused by application HTTP error storms "
-                f"reaching {val:.1f}%, signaling upstream service unresponsiveness."
-            ),
-            "disk": (
+                f"is high at {val:.1f}%, causing memory pressure."
+            )
+        elif top_driver == "disk" and val >= 85.0:
+            return (
                 f"System is at {risk} risk (P_fail: {p_failure:.2f}) because disk utilization "
-                f"has reached {val:.1f}%, indicating I/O saturation or disk exhaustion."
-            ),
-        }
+                f"has reached {val:.1f}%, indicating storage saturation."
+            )
+        elif top_driver == "latency" and val >= 400.0:
+            return (
+                f"System is at {risk} risk (P_fail: {p_failure:.2f}) due to network latency degradation "
+                f"at {val:.1f}ms."
+            )
+        elif top_driver == "error_rate" and val >= 5.0:
+            return (
+                f"System is at {risk} risk (P_fail: {p_failure:.2f}) caused by application HTTP error storms "
+                f"reaching {val:.1f}%."
+            )
 
-        return explanations.get(
-            top_driver,
-            f"System anomaly detected with {risk} risk (Anomaly: {anomaly_score:.2f}, P_fail: {p_failure:.2f})."
+        return (
+            f"System is operating within normal baseline limits (Risk: {risk}, Anomaly: {anomaly_score:.2f})."
         )
 
 
