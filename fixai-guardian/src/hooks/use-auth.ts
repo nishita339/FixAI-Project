@@ -6,7 +6,7 @@ const MOCK_USER_KEY = "fixai_mock_user";
 const MOCK_TOKEN_KEY = "fixai_access_token";
 const MOCK_OTP_KEY = "fixai_active_otp";
 
-const FASTAPI_URL = (import.meta as any).env?.VITE_FASTAPI_URL || "http://localhost:8000";
+import { FASTAPI_URL } from "@/lib/api-config";
 
 export interface SendOtpResult {
   success: boolean;
@@ -69,8 +69,13 @@ export function useAuth() {
         throw new Error(errorMsg);
       }
 
-      sessionStorage.removeItem(MOCK_OTP_KEY);
-      setActiveOtp(null);
+      if (data.dev_otp) {
+        sessionStorage.setItem(MOCK_OTP_KEY, data.dev_otp);
+        setActiveOtp(data.dev_otp);
+      } else {
+        sessionStorage.removeItem(MOCK_OTP_KEY);
+        setActiveOtp(null);
+      }
 
       return {
         success: true,

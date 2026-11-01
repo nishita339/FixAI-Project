@@ -35,6 +35,7 @@ def normalize_database_url(raw_url: str) -> Tuple[str, Dict[str, Any]]:
 
     if url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
+        connect_args["timeout"] = 60.0
         return url, connect_args
 
     # Normalize PostgreSQL URL scheme
@@ -91,6 +92,20 @@ else:
 
 engine = create_async_engine(NORMALIZED_URL, **engine_kwargs)
 
+from sqlalchemy import event
+
+if NORMALIZED_URL.startswith("sqlite"):
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        try:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=60000")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.close()
+        except Exception:
+            pass
+
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
@@ -107,9 +122,11 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
+            if session.is_active:
+                await session.commit()
         except Exception:
-            await session.rollback()
+            if session.is_active:
+                await session.rollback()
             raise
 
 

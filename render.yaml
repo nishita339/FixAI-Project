@@ -48,7 +48,7 @@ services:
     region: oregon
     plan: free
     rootDir: fixai-guardian
-    buildCommand: "npm install && npm run build"
+    buildCommand: "npm ci && npm run build"
     staticPublishPath: dist
     autoDeploy: true
     headers:

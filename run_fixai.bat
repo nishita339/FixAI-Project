@@ -8,8 +8,22 @@ echo.
 
 cd /d "%~dp0"
 
+:: Auto-detect Python executable (py -3.11, python, or direct path)
+set "PYTHON_CMD=python"
+where py >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    set "PYTHON_CMD=py -3.11"
+) else (
+    where python >nul 2>&1
+    if %ERRORLEVEL% neq 0 (
+        if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+            set "PYTHON_CMD="%LOCALAPPDATA%\Programs\Python\Python311\python.exe""
+        )
+    )
+)
+
 echo [1/4] Starting Backend Server (FastAPI on Port 8000)...
-start "FixAI - Backend API" cmd /k "cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+start "FixAI - Backend API" cmd /k "cd backend && %PYTHON_CMD% -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
 timeout /t 3 /nobreak >nul
 
@@ -19,7 +33,7 @@ start "FixAI - Web Dashboard" cmd /k "cd fixai-guardian && npm run dev"
 timeout /t 3 /nobreak >nul
 
 echo [3/4] Starting Edge AI Agent Daemon (Hardware Telemetry & EDR)...
-start "FixAI - Edge Agent" cmd /k "cd fixai-guardian\local_agent && python main.py"
+start "FixAI - Edge Agent" cmd /k "cd fixai-guardian\local_agent && %PYTHON_CMD% main.py"
 
 timeout /t 2 /nobreak >nul
 

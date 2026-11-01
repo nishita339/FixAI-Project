@@ -1,3 +1,4 @@
+import { FASTAPI_URL } from "@/lib/api-config";
 import React, { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,7 @@ export default function Fleet() {
   const fetchFleet = async () => {
     setLoading(true);
     try {
-      const backendUrl = import.meta.env.VITE_FASTAPI_URL || "http://localhost:8000";
+      const backendUrl = FASTAPI_URL;
       const res = await fetch(`${backendUrl}/api/v1/agent/fleet`);
       if (res.ok) {
         const data = await res.json();

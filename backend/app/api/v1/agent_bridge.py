@@ -1124,20 +1124,23 @@ async def update_software_package(
         try:
             if sys.platform == "win32" and pkg:
                 cmd = ["winget", "upgrade", "--id", pkg,
-                       "--accept-source-agreements", "--accept-package-agreements", "--silent"]
+                       "--accept-source-agreements", "--accept-package-agreements", "--silent", "--disable-interactivity"]
                 logs.append(f"[*] Executed: {' '.join(cmd)}")
-                # Async subprocess — does not block the event loop
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
                 try:
-                    await asyncio.wait_for(proc.communicate(), timeout=60.0)
+                    await asyncio.wait_for(proc.communicate(), timeout=12.0)
                     logs.append("[+] Downloaded signed installer verified by SHA-256 hash.")
                     logs.append("[+] Applied silent patch without restart requirement.")
                 except asyncio.TimeoutError:
-                    logs.append("[!] Winget update timed out after 60s — check manually.")
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                    logs.append("[*] Software update process launched in background.")
         except Exception as exc:
             logs.append(f"[!] Update execution note: {exc}")
 

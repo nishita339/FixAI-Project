@@ -15,7 +15,9 @@ if _backend_dir not in sys.path:
 warnings.filterwarnings("ignore", message=".*unpickle estimator.*")
 warnings.filterwarnings("ignore", message=".*serialized model.*")
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi.responses import JSONResponse
+import logging
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.agent_bridge import router as agent_router
@@ -210,6 +212,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.getLogger("fixai.api").error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    origin = request.headers.get("origin", "*")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc), "error": type(exc).__name__, "path": request.url.path},
+        headers={
+            "Access-Control-Allow-Origin": origin if origin else "*",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
 
 # Include agent bridge routes (/api/v1/agent/...)
 app.include_router(agent_router, prefix=settings.API_V1_STR)

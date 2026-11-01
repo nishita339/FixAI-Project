@@ -27,7 +27,7 @@ export interface StoredAuditLog {
   reason: string;
 }
 
-const FASTAPI_URL = (import.meta as any).env?.VITE_FASTAPI_URL || "http://localhost:8000";
+import { FASTAPI_URL } from "./api-config";
 const LOCAL_INCIDENTS_KEY = "fixai_local_incidents_v2";
 const LOCAL_AUDIT_KEY = "fixai_local_audit_v2";
 
@@ -88,7 +88,7 @@ export async function fetchUnifiedIncidents(convexIncidents?: any[]): Promise<St
   // 2. Fetch from FastAPI backend
   try {
     const resp = await axios.get<StoredIncident[]>(`${FASTAPI_URL}/api/v1/recovery/incidents`, {
-      timeout: 2000,
+      timeout: 10000,
     });
     if (Array.isArray(resp.data)) {
       for (const item of resp.data) {
@@ -137,7 +137,7 @@ export async function fetchUnifiedAuditLogs(convexAudit?: any[]): Promise<Stored
   // 2. Fetch from backend SQLite
   try {
     const resp = await axios.get<StoredAuditLog[]>(`${FASTAPI_URL}/api/v1/recovery/audit-logs`, {
-      timeout: 2000,
+      timeout: 10000,
     });
     if (Array.isArray(resp.data)) {
       for (const item of resp.data) {
@@ -184,7 +184,7 @@ export async function executeLiveRepair(
       title: humanTitle,
       category,
       params,
-    }, { timeout: 15000 });
+    }, { timeout: 30000 });
 
     if (resp.data && resp.data.success) {
       const incidentId = resp.data.incident_id || `inc-${now}`;

@@ -122,7 +122,7 @@ export default function Recovery() {
               Pre-Audited Playbook Catalog (On-Demand Execution)
             </h2>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {PLAYBOOKS.map((pb) => (
+              {Array.from(new Map(PLAYBOOKS.map((p) => [p.id, p])).values()).map((pb) => (
                 <Card key={pb.id} className="border-border/70 shadow-soft flex flex-col justify-between">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">

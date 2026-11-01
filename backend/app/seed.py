@@ -107,6 +107,13 @@ ALL_PLAYBOOKS = [
         "description": "Soft refresh DWM display pipeline to resolve VRAM leaks and screen stutter.",
     },
     {
+        "id": "refresh_dwm_compositor",
+        "name": "Restart Desktop Window Manager & Graphics Pipe",
+        "risk_tier": "LOW",
+        "verification_window_seconds": 5,
+        "description": "Refreshes DWM display compositor thread and clears DirectX swapchain buffer to resolve screen flickering and stutter.",
+    },
+    {
         "id": "optimize_storage_trim",
         "name": "SSD Hardware TRIM & Sector Clean",
         "risk_tier": "LOW",

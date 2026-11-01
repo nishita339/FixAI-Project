@@ -1,3 +1,4 @@
+import { FASTAPI_URL } from "@/lib/api-config";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -210,7 +211,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     if (typeof step !== "object") return;
     setIsLoading(true);
     try {
-      const FASTAPI_URL = (import.meta as any).env?.VITE_FASTAPI_URL || "http://localhost:8000";
+      // FASTAPI_URL imported from api-config
       const res = await fetch(`${FASTAPI_URL}/api/v1/auth/local-otp?email=${encodeURIComponent(step.email)}`);
       const data = await res.json();
       if (res.ok && data.otp) {

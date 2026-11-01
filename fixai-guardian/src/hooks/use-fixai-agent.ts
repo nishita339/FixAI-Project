@@ -28,7 +28,7 @@ import { saveLocalIncident, saveLocalAuditLog } from "@/lib/history-store";
 import { useSafeConvexAuth, useSafeQuery, useSafeMutation } from "@/lib/convex-safe";
 
 
-const FASTAPI_URL = (import.meta as any).env?.VITE_FASTAPI_URL || "http://localhost:8000";
+import { FASTAPI_URL, WS_URL } from "@/lib/api-config";
 
 export interface ActiveEpisode {
   incident: Incident;
@@ -159,7 +159,7 @@ export function useFixAiAgent(): FixAiAgent {
     const connectWs = () => {
       if (isCancelled) return;
       try {
-        const wsUrl = FASTAPI_URL.replace(/^http/, "ws") + "/api/v1/ws/telemetry";
+        const wsUrl = WS_URL;
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
@@ -228,7 +228,14 @@ export function useFixAiAgent(): FixAiAgent {
       if (ws) {
         ws.onclose = null;
         ws.onerror = null;
-        ws.close();
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        } else if (ws.readyState === WebSocket.CONNECTING) {
+          const currentWs = ws;
+          currentWs.onopen = () => {
+            try { currentWs.close(); } catch {}
+          };
+        }
       }
     };
   }, []);

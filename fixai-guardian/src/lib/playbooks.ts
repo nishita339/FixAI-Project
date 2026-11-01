@@ -339,7 +339,7 @@ export const PLAYBOOKS: Playbook[] = [
     verificationWindowSeconds: 5,
   },
   {
-    id: "restart_graphics_subsystem",
+    id: "refresh_dwm_compositor",
     name: "Restart Desktop Window Manager & Graphics Pipe",
     description:
       "Refreshes DWM display compositor thread and clears DirectX swapchain buffer to resolve screen flickering and stutter.",

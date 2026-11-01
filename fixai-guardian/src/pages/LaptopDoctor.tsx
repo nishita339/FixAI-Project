@@ -53,7 +53,7 @@ import {
 import { Link } from "react-router";
 import { toast } from "sonner";
 
-const FASTAPI_URL = (import.meta as any).env?.VITE_FASTAPI_URL || "http://localhost:8000";
+import { FASTAPI_URL } from "@/lib/api-config";
 
 interface SysDiagnostics {
   timestamp: number;
@@ -225,7 +225,7 @@ export default function LaptopDoctor() {
         package_id: pkgId,
         app_name: appName,
         update_all: updateAll,
-      });
+      }, { timeout: 30000 });
 
       if (res.status === 200 && res.data) {
         setExecutingLogs(res.data.logs || []);

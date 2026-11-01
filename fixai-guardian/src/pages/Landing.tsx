@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router";
+import { openPrivacyConsentModal } from "@/components/fixai/CookieConsentBanner";
 
 const FEATURES = [
   {
@@ -391,6 +392,7 @@ export default function Landing() {
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <Link to="/dashboard" className="hover:text-foreground">Dashboard</Link>
             <Link to="/demo" className="hover:text-foreground">Live demo</Link>
+            <button type="button" onClick={openPrivacyConsentModal} className="hover:text-foreground underline-offset-4 hover:underline cursor-pointer">Privacy & Cookies</button>
             <span>© {new Date().getFullYear()} FixAI</span>
           </div>
         </div>
