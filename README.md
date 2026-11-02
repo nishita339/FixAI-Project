@@ -211,7 +211,8 @@ Telemetry Vector [CPU, RAM, Latency, ErrorRate, Disk]
 
 | Task | Algorithm | Features | Output / Goal |
 | :--- | :--- | :--- | :--- |
-| **Anomaly Scoring** | IsolationForest(n_estimators=100) | cpu, am, latency, error_rate, disk | Normalized anomaly score $\in [0, 1]$ |
+| **Anomaly Scoring** | IsolationForest(n_estimators=100) | cpu, 
+am, latency, error_rate, disk | Normalized anomaly score $\in [0, 1]$ |
 | **Failure Prediction** | XGBClassifier(max_depth=4, n_est=150) | Scaled 5-metric vector + moving averages | (\text{Failure})$ in next 5 minutes |
 | **Root Cause Analysis** | shap.TreeExplainer(model) | Fitted trees & scaled deviations | Signed feature attribution weights |
 | **Remaining Useful Life** | GradientBoostingRegressor | CMAPSS 21 sensor measurements | Predicted operational cycles to failure |
@@ -246,13 +247,18 @@ FixAI maintains a strict **zero-unauthorized-action** guarantee using a multi-ti
 
 | Risk Tier | Example Playbooks | Execution Policy | Auto-Approval Limit |
 | :--- | :--- | :--- | :--- |
-| **🟢 LOW** | lush_cache, estart_worker, cool_down_cpu, optimize_storage_trim, eset_network_adapter | Autonomous execution | Max 3 executions / day |
-| **🟡 MEDIUM** | estart_container, scale_instances, ix_windows_update, epair_system_files | Requires operator 1-click confirmation | Operator gated |
+| **🟢 LOW** | lush_cache, 
+estart_worker, cool_down_cpu, optimize_storage_trim, 
+eset_network_adapter | Autonomous execution | Max 3 executions / day |
+| **🟡 MEDIUM** | 
+estart_container, scale_instances, ix_windows_update, 
+epair_system_files | Requires operator 1-click confirmation | Operator gated |
 | **🔴 HIGH** | db_maintenance, schema_rollback, disk_repartition | Recommendation only (Manual execution) | Hard-blocked by policy |
 
 ### Non-Negotiable Safety Rules:
 1. **Allowlisted Playbooks Only:** The execution engine only invokes audited playbook identifiers (playbook_id) with typed parameters—raw arbitrary shell strings are rejected.
-2. **Static AST Guard:** Strings containing destructive patterns (m -rf, DROP TABLE, eval(, chmod 777, mkfs) are intercepted and blocked at the API level.
+2. **Static AST Guard:** Strings containing destructive patterns (
+m -rf, DROP TABLE, eval(, chmod 777, mkfs) are intercepted and blocked at the API level.
 3. **Post-Fix Soak Validation:** Every remediation initiates an automated 15-second metric soak. If telemetry does not normalize, the incident is flagged for manual escalation.
 4. **Immutable Audit Trail:** Every decision, trigger, and output is permanently logged in the SQLite / PostgreSQL database.
 
@@ -400,7 +406,7 @@ python scripts/simulate_fault.py --fault disk --duration 30
 ## 👥 Authors & Acknowledgments
 
 * **Project**: AI-Driven Intelligent Failure Prediction, Diagnosis, Guided Recovery & Permission-Aware Self-Healing System
-* **Author**: Nishita Singh ([@nishita339](https://github.com/nishita339))
+* **Author**: Nishita Singh ([@nishita339](https://github.com/nishita339)), Monika
 * **Repository**: [https://github.com/nishita339/FixAI-Project](https://github.com/nishita339/FixAI-Project)
 
 ---
