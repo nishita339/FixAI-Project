@@ -406,9 +406,9 @@ python scripts/simulate_fault.py --fault disk --duration 30
 ## 👥 Authors & Acknowledgments
 
 * **Project**: AI-Driven Intelligent Failure Prediction, Diagnosis, Guided Recovery & Permission-Aware Self-Healing System
-* **Author**: Nishita Singh ([@nishita339](https://github.com/nishita339)), Monika
+* **Author**: Nishita Singh ([@nishita339](https://github.com/nishita339)), Monika (https://github.com/Monikajangid5396)
 * **Repository**: [https://github.com/nishita339/FixAI-Project](https://github.com/nishita339/FixAI-Project)
-
+* **Website**: Live Link (https://fixai-guardian.vercel.app)
 ---
 
 ## 📜 License
