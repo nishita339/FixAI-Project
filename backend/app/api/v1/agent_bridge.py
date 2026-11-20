@@ -148,10 +148,20 @@ async def ingest_telemetry(
     tel = payload.get_telemetry()
     verdict = payload.get_verdict()
     _latest_telemetry = {
+        "t": payload.timestamp or int(now.timestamp() * 1000),
         "cpu": tel.cpu,
         "ram": tel.ram,
         "disk": tel.disk,
         "latency": tel.latency if tel.latency is not None else 0.0,
+        "errorRate": tel.errorRate,
+        "battery": tel.battery,
+        "battery_available": tel.battery_available if tel.battery_available is not None else (tel.battery is not None),
+        "isPlugged": tel.is_plugged,
+        "temp": tel.temp,
+        "temp_available": tel.temp_available if tel.temp_available is not None else (tel.temp is not None),
+        "isRealHardware": True,
+        "host": "win32",
+        "last_updated": time.time(),
     }
 
     # 1. Update device state
@@ -570,7 +580,12 @@ async def get_live_telemetry():
     Returns real-time laptop hardware metrics directly from host psutil.
     No mock or simulation: real CPU, RAM, Disk, Battery, and Temperature!
     """
+    global _latest_telemetry
     import psutil, time, sys
+
+    # If the local agent has streamed real hardware metrics recently, return those!
+    if _latest_telemetry and (time.time() - _latest_telemetry.get("last_updated", 0)) < 60:
+        return _latest_telemetry
 
     cpu = float(psutil.cpu_percent(interval=None))
     mem = psutil.virtual_memory()
