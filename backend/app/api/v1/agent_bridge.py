@@ -151,7 +151,7 @@ async def ingest_telemetry(
         "cpu": tel.cpu,
         "ram": tel.ram,
         "disk": tel.disk,
-        "latency": tel.latency,
+        "latency": tel.latency if tel.latency is not None else 0.0,
     }
 
     # 1. Update device state
@@ -176,7 +176,7 @@ async def ingest_telemetry(
         timestamp=sample_time,
         cpu=tel.cpu,
         ram=tel.ram,
-        latency=tel.latency,
+        latency=tel.latency if tel.latency is not None else 0.0,
         error_rate=tel.errorRate,
         disk=tel.disk,
     )
@@ -301,7 +301,7 @@ async def ingest_telemetry_batch(
             timestamp=sample_time,
             cpu=tel.cpu,
             ram=tel.ram,
-            latency=tel.latency,
+            latency=tel.latency if tel.latency is not None else 0.0,
             error_rate=tel.errorRate,
             disk=tel.disk,
         )

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 class TelemetryData(BaseModel):
     cpu: float
     ram: float
-    latency: float = 0.0
+    latency: Optional[float] = 0.0
     errorRate: float = Field(default=0.0, alias="error_rate")
     disk: float = 0.0
     battery: Optional[float] = None

@@ -224,7 +224,7 @@ def collect_hardware_metrics() -> Dict[str, Any]:
         core_temp = None
 
     # Genuine Network Latency (measured via TCP connect round-trip)
-    latency_ms = None
+    latency_ms = 0.0
     try:
         t0 = time.perf_counter()
         s = socket.create_connection(("127.0.0.1", 8000), timeout=0.4)
@@ -237,7 +237,7 @@ def collect_hardware_metrics() -> Dict[str, Any]:
             s.close()
             latency_ms = round((time.perf_counter() - t0) * 1000.0, 1)
         except Exception:
-            latency_ms = None
+            latency_ms = 0.0
 
     # Genuine Network Interface Error Rate (from psutil net_io_counters)
     error_rate = 0.0
@@ -252,7 +252,7 @@ def collect_hardware_metrics() -> Dict[str, Any]:
     return {
         "cpu": round(cpu_usage, 1),
         "ram": round(float(memory_info.percent), 1),
-        "latency": latency_ms,
+        "latency": latency_ms if latency_ms is not None else 0.0,
         "error_rate": error_rate,
         "disk": round(disk_usage, 1),
         "temp": core_temp,
@@ -305,8 +305,9 @@ def send_telemetry_payload(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 return {"status": "ok"}
         else:
             logger.warning(
-                "⚠️  Backend endpoint returned non-200 status [%d] — caching payload in local offline buffer",
+                "⚠️  Backend endpoint returned non-200 status [%d]: %s — caching payload in local offline buffer",
                 response.status_code,
+                response.text,
             )
             offline_buffer.enqueue(payload)
             return None
